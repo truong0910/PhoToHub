@@ -2,7 +2,7 @@ import { BookingPipelineContext } from "./pipeline.types.js";
 
 export async function createBookingStep(context: BookingPipelineContext): Promise<void> {
   console.log("Booking Pipeline Step 4: CreateBooking executing...");
-  const { client_id, equipment_id, photographer_id, start_date, end_date } = context.dto;
+  const { client_id, equipment_id, photographer_id, start_date, end_date, payment_code } = context.dto;
 
   const bookingData = {
     client_id,
@@ -11,7 +11,8 @@ export async function createBookingStep(context: BookingPipelineContext): Promis
     start_date: new Date(start_date).toISOString(),
     end_date: new Date(end_date).toISOString(),
     status: "pending",
-    total_price: context.totalPrice || 0
+    total_price: context.totalPrice || 0,
+    payment_code: payment_code || null
   };
 
   const { data: created, error: insertError } = await context.supabase

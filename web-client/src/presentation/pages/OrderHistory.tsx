@@ -189,8 +189,7 @@ export function OrderHistory({ clientId, bookings, refreshBookings, onSelectBook
                 <div className="text-right font-mono">
                   <div className="text-[9px] text-photohub-muted font-bold uppercase tracking-wider">Tổng cộng</div>
                   <div className="text-xs font-bold text-photohub-teal flex items-center justify-end gap-0.5">
-                    <CircleDollarSign className="w-3.5 h-3.5 text-photohub-muted" />
-                    <span>${Number(b.total_price).toFixed(2)}</span>
+                    <span>{(Number(b.total_price)).toLocaleString('vi-VN')} đ</span>
                   </div>
                 </div>
 

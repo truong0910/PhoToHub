@@ -6,6 +6,7 @@ export const bookingInputSchema = z.object({
   client_id: z.string().uuid("Invalid client_id format. Must be a valid UUID."),
   photographer_id: z.string().uuid("Invalid photographer_id format. Must be a valid UUID.").nullable().optional(),
   equipment_id: z.string().uuid("Invalid equipment_id format. Must be a valid UUID.").nullable().optional(),
+  payment_code: z.string().nullable().optional(),
   start_date: z.string().refine((val) => !isNaN(Date.parse(val)), {
     message: "Invalid start_date format. Must be a valid ISO 8601 date string."
   }),

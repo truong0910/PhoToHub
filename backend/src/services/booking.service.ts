@@ -14,6 +14,7 @@ export interface BookingRequestDto {
   equipment_id?: string | null;
   start_date: string;
   end_date: string;
+  payment_code?: string | null;
 }
 
 export class BookingService {

@@ -118,4 +118,26 @@ export class UserBookingSource {
 
     return data || [];
   }
+
+  /**
+   * Fetch all booked/busy date ranges for a given photographer or equipment.
+   */
+  static async fetchBookedDates(
+    resourceId: string,
+    type: "photographer" | "equipment"
+  ): Promise<{ start_date: string; end_date: string }[]> {
+    const field = type === "photographer" ? "photographer_id" : "equipment_id";
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("start_date, end_date")
+      .eq(field, resourceId)
+      .in("status", ["pending", "approved", "ongoing"]);
+
+    if (error) {
+      console.error("Error fetching booked dates:", error);
+      throw error;
+    }
+
+    return data || [];
+  }
 }

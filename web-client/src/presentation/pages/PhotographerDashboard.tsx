@@ -414,7 +414,7 @@ export function PhotographerDashboard({ currentUserId, clientName }: Photographe
                 </div>
                 <div>
                   <span className="text-[10px] font-bold text-photohub-muted uppercase tracking-wider block">Doanh thu tích lũy</span>
-                  <span className="text-lg font-bold font-mono text-photohub-teal">${totalRevenue.toFixed(2)}</span>
+                  <span className="text-lg font-bold font-mono text-photohub-teal">{totalRevenue.toLocaleString('vi-VN')} đ</span>
                 </div>
               </div>
 
@@ -424,7 +424,7 @@ export function PhotographerDashboard({ currentUserId, clientName }: Photographe
                 </div>
                 <div>
                   <span className="text-[10px] font-bold text-photohub-muted uppercase tracking-wider block">Doanh thu dự kiến</span>
-                  <span className="text-lg font-bold font-mono text-emerald-600">${potentialRevenue.toFixed(2)}</span>
+                  <span className="text-lg font-bold font-mono text-emerald-600">{potentialRevenue.toLocaleString('vi-VN')} đ</span>
                 </div>
               </div>
 
@@ -487,7 +487,7 @@ export function PhotographerDashboard({ currentUserId, clientName }: Photographe
 
                       <div className="text-right">
                         <span className="text-[9px] uppercase tracking-wider text-photohub-muted block font-semibold">Giá trị buổi</span>
-                        <span className="text-xs font-bold text-photohub-orange font-mono">${b.total_price}</span>
+                        <span className="text-xs font-bold text-photohub-orange font-mono">{(Number(b.total_price)).toLocaleString('vi-VN')} đ</span>
                       </div>
                     </div>
                   ))}
@@ -537,7 +537,7 @@ export function PhotographerDashboard({ currentUserId, clientName }: Photographe
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="font-semibold text-photohub-teal">Giá thuê cơ bản (USD/buổi)</label>
+                    <label className="font-semibold text-photohub-teal">Giá thuê cơ bản (VND/buổi)</label>
                     <input
                       type="number"
                       value={profile.base_price}

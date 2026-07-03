@@ -17,7 +17,8 @@ import {
   Loader,
   Share2,
   LogOut,
-  CircleDollarSign
+  CircleDollarSign,
+  Trash2
 } from "lucide-react";
 
 interface PaymentCountdownProps {
@@ -52,25 +53,29 @@ function PaymentCountdown({ createdAt, timeoutDurationMs, onTimeout }: PaymentCo
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [createdAt, timeoutDurationMs]);
+  }, [secondsLeft]);
 
-  const minutes = Math.floor(secondsLeft / 60);
-  const seconds = secondsLeft % 60;
-  const formattedTime = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
 
   return (
-    <span className="font-mono text-photohub-orange font-bold text-sm bg-photohub-orange/10 px-2.5 py-0.5 rounded border border-photohub-orange/20 animate-pulse flex items-center gap-1">
-      ⏳ Giữ chỗ còn lại: {formattedTime}
+    <span className="font-mono text-xs font-bold text-amber-600 bg-amber-500/20 px-2 py-0.5 rounded">
+      ⏱️ Hạn thanh toán: {formatTime(secondsLeft)}
     </span>
   );
 }
 
 export default function App() {
-  // Decoupled business logic hook
   const hookData = useUserBooking();
 
-  // Navigation Tabs: 'equipment' (Thuê Thiết Bị), 'photographer' (Thuê Người Chụp), 'orders' (Đơn Hàng), 'profile' (Hồ Sơ)
-  const [activeTab, setActiveTab] = useState<"equipment" | "photographer" | "orders" | "profile">("equipment");
+  // Navigation Tabs: 'equipment' (Thuê Thiết Bị), 'photographer' (Thuê Người Chụp), 'orders' (Đơn Hàng), 'profile' (Hồ Sơ), 'cart' (Giỏ Hàng)
+  const [activeTab, setActiveTab] = useState<"equipment" | "photographer" | "orders" | "profile" | "cart">("equipment");
+
+  // Selected cart items checkboxes
+  const [selectedCartIds, setSelectedCartIds] = useState<string[]>([]);
 
   // Equipment category filter: 'all', 'body', 'lens', 'lighting'
   const [equipCategory, setEquipCategory] = useState<"all" | "body" | "lens" | "lighting">("all");
@@ -81,7 +86,7 @@ export default function App() {
   // Selected product checkout modal state
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
-  // SePay newly created booking context
+  // SePay newly created booking context (single or batch)
   const [createdBooking, setCreatedBooking] = useState<any>(null);
 
   // SePay banking recipient configuration from backend env
@@ -152,7 +157,7 @@ export default function App() {
     } else {
       setSelectedProduct({
         id: "unknown",
-        name: "PhotoHub Studio Service",
+        name: "Dịch vụ đặt lịch PhotoHub",
         avatar: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=400",
         price: booking.total_price,
         category: "service",
@@ -165,22 +170,41 @@ export default function App() {
   const handleConfirmCashPayment = async (bookingId: string) => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
-      const response = await fetch(`${apiUrl}/bookings/${bookingId}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status: "approved" }),
-      });
 
-      if (!response.ok) {
+      if (createdBooking?.isBatch) {
+        // Approve all bookings in the batch via REST API
+        await Promise.all(createdBooking.bookings.map(async (b: any) => {
+          const response = await fetch(`${apiUrl}/bookings/${b.id}/status`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ status: "approved" }),
+          });
+          if (!response.ok) throw new Error("Gặp lỗi khi duyệt đơn trong nhóm.");
+        }));
+
+        alert("Xác nhận thanh toán tiền mặt nhóm thành công!");
+        setCreatedBooking((prev: any) => ({ ...prev, status: "approved" }));
+        await hookData.refreshBookings();
+      } else {
+        const response = await fetch(`${apiUrl}/bookings/${bookingId}/status`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: "approved" }),
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || "Failed to confirm cash payment.");
+        }
+
         const result = await response.json();
-        throw new Error(result.error || "Failed to confirm cash payment.");
+        setCreatedBooking(result.data);
+        await hookData.refreshBookings();
       }
-
-      const result = await response.json();
-      setCreatedBooking(result.data);
-      await hookData.refreshBookings();
     } catch (err: any) {
       console.error("Failed to approve cash payment:", err);
       alert(`Không thể xác nhận thanh toán tiền mặt: ${err.message}`);
@@ -191,17 +215,30 @@ export default function App() {
     if (!window.confirm("Bạn có chắc chắn muốn hủy đơn hàng đặt lịch này không?")) return;
     try {
       const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
-      const response = await fetch(`${apiUrl}/bookings/${bookingId}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status: "cancelled" }),
-      });
 
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || "Failed to cancel booking.");
+      if (createdBooking?.isBatch) {
+        await Promise.all(createdBooking.bookings.map(async (b: any) => {
+          await fetch(`${apiUrl}/bookings/${b.id}/status`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ status: "cancelled" }),
+          });
+        }));
+      } else {
+        const response = await fetch(`${apiUrl}/bookings/${bookingId}/status`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: "cancelled" }),
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || "Failed to cancel booking.");
+        }
       }
 
       handleCloseModal();
@@ -214,9 +251,27 @@ export default function App() {
 
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const data = await hookData.submitBooking(e);
-    if (data) {
-      setCreatedBooking(data);
+    if (selectedProduct?.type === "cart") {
+      await handleCartCheckoutSubmit(selectedCartIds);
+    } else {
+      const data = await hookData.submitBooking(e);
+      if (data) {
+        setCreatedBooking(data);
+      }
+    }
+  };
+
+  const handleCartCheckoutSubmit = async (cartIds: string[]) => {
+    const res = await hookData.checkoutCart(cartIds);
+    if (res) {
+      setCreatedBooking({
+        id: res.paymentCode,
+        total_price: res.totalPrice,
+        created_at: new Date().toISOString(),
+        isBatch: true,
+        bookings: res.bookings
+      });
+      setSelectedCartIds([]);
     }
   };
 
@@ -241,9 +296,9 @@ export default function App() {
     return <AuthPage />;
   }
 
-  const clientName = hookData.clientProfile?.full_name || "Khách Hàng";
-  const clientPhone = hookData.clientProfile?.phone || "Chưa cập nhật SĐT";
+  const clientName = hookData.clientProfile?.full_name || "Thành Viên";
   const clientRole = hookData.clientProfile?.role || "client";
+  const clientPhone = hookData.clientProfile?.phone || "Chưa cập nhật SĐT";
 
   // If photographer, render photographer dashboard directly
   if (clientRole === "photographer") {
@@ -256,7 +311,7 @@ export default function App() {
     name: p.full_name || "Nhiếp ảnh gia mới",
     type: "photographer",
     category: p.role === "admin" ? "Master Director" : "Senior Portraitist",
-    price: Number(p.base_price) || 150,
+    price: Number(p.base_price) || 1500000,
     rating: 4.9,
     reviews: 32,
     avatar: p.avatar_url || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
@@ -276,27 +331,20 @@ export default function App() {
     name: e.name,
     type: "equipment",
     rawCategory: e.category, // 'body', 'lens', 'lighting'
-    category: e.category === "body" ? "MÁY ẢNH" : e.category === "lens" ? "PHỤ KIỆN - LENS" : "ĐÈN CHIẾU SÁNG",
+    category: e.category === "body" ? "CHỤP ẢNH 📸" : e.category === "lens" ? "LENS CHUYÊN DỤNG 🔋" : "THIẾT BỊ ÁNH SÁNG 🎧",
     price: Number(e.price_per_day),
     rating: 4.8,
-    reviews: 14,
-    avatar: e.category === "body"
-      ? "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=150"
-      : e.category === "lens"
-        ? "https://images.unsplash.com/photo-1617005082133-548c4dd27f35?w=150"
-        : "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=150",
-    desc: `Thiết bị ${e.name} chuyên nghiệp đầy đủ phụ kiện kèm theo như pin, sạc và túi chống sốc. Sẵn sàng cho mọi buổi ghi hình.`,
-    badge: e.status === "available" ? "CÓ SẴN" : "BẢO TRÌ",
-    specs: ["Đã được vệ sinh khử khuẩn", "Kèm pin dự phòng", "Kèm chân máy hoặc chân đèn chuyên dụng"],
+    reviews: 24,
+    avatar: e.image_url || "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=400",
+    desc: "Thiết bị chụp ảnh studio cao cấp được bảo dưỡng định kỳ, thấu kính sạch sẽ không trầy xước, cảm biến hoạt động hoàn hảo.",
+    badge: "Sẵn có",
+    specs: ["Bảo hành trách nhiệm", "Đầy đủ pin & sạc đi kèm", "Hỗ trợ kỹ thuật 24/7"],
   }));
 
-  // Filter equipment catalog
-  let filteredEquipment = equipmentProducts.filter((item) => {
-    if (equipCategory === "all") return true;
-    return item.rawCategory === equipCategory;
-  });
+  // 5. Apply filters and sort order
+  const filteredEquipment = equipmentProducts
+    .filter((e) => equipCategory === "all" || e.rawCategory === equipCategory);
 
-  // Sort equipment catalog
   if (sortBy === "name") {
     filteredEquipment.sort((a, b) => a.name.localeCompare(b.name));
   } else if (sortBy === "price_low") {
@@ -304,8 +352,6 @@ export default function App() {
   } else if (sortBy === "price_high") {
     filteredEquipment.sort((a, b) => b.price - a.price);
   }
-
-
 
   return (
     <div className="min-h-screen bg-photohub-sand text-photohub-teal flex flex-col font-sans selection:bg-photohub-orange selection:text-white">
@@ -356,6 +402,20 @@ export default function App() {
             )}
           </button>
           <button
+            onClick={() => setActiveTab("cart")}
+            className={`px-4 py-2.5 rounded-lg transition-all cursor-pointer relative ${activeTab === "cart"
+                ? "bg-photohub-teal text-white shadow"
+                : "text-photohub-teal/75 hover:bg-photohub-teal/5"
+              }`}
+          >
+            GIỎ HÀNG
+            {hookData.cartItems.length > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 bg-photohub-orange text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                {hookData.cartItems.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setActiveTab("profile")}
             className={`px-4 py-2.5 rounded-lg transition-all cursor-pointer ${activeTab === "profile"
                 ? "bg-photohub-teal text-white shadow"
@@ -370,7 +430,7 @@ export default function App() {
         <div className="flex items-center gap-4">
           <div className="hidden sm:block text-right">
             <div className="text-xs font-bold text-photohub-teal">{clientName}</div>
-            <div className="text-[9px] uppercase tracking-wider text-photohub-orange font-bold font-mono">Hạng {clientRole === "admin" ? "Admin" : "Thành Viên"}</div>
+            <div className="text-[9px] uppercase tracking-wider text-photohub-orange font-bold font-mono font-serif">Hạng {clientRole === "admin" ? "Admin" : "Thành Viên"}</div>
           </div>
           <button
             onClick={() => setActiveTab("profile")}
@@ -407,7 +467,13 @@ export default function App() {
           onClick={() => setActiveTab("orders")}
           className={`flex-1 py-2 text-center rounded relative ${activeTab === "orders" ? "bg-photohub-teal text-white" : "text-photohub-teal/70"}`}
         >
-          Đơn Hàng ({hookData.myBookings.length})
+          Đơn ({hookData.myBookings.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("cart")}
+          className={`flex-1 py-2 text-center rounded relative ${activeTab === "cart" ? "bg-photohub-teal text-white" : "text-photohub-teal/70"}`}
+        >
+          Giỏ ({hookData.cartItems.length})
         </button>
         <button
           onClick={() => setActiveTab("profile")}
@@ -422,7 +488,6 @@ export default function App() {
         {/* TAB 1: THUÊ THIẾT BỊ (E-Commerce style matching image) */}
         {activeTab === "equipment" && (
           <div className="space-y-8 animate-fadeIn">
-            {/* Header info banner */}
             <div className="rounded-2xl bg-photohub-teal text-photohub-sand p-8 md:p-10 shadow border border-photohub-teal flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-3">
                 <span className="text-[10px] uppercase font-mono tracking-widest text-photohub-orange font-bold">Studio Gear Store</span>
@@ -433,15 +498,13 @@ export default function App() {
               </div>
             </div>
 
-            {/* DANH MỤC Filter Box */}
             <div className="bg-white border border-photohub-teal/5 rounded-2xl p-6 space-y-6 shadow-sm">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-extrabold text-photohub-teal uppercase tracking-widest font-mono">DANH MỤC</span>
-                  <span className="text-xs text-photohub-muted font-bold font-mono">Hiển thị {filteredEquipment.length} sản phẩm</span>
+                  <span className="text-xs text-photohub-muted font-bold font-mono font-serif">Hiển thị {filteredEquipment.length} sản phẩm</span>
                 </div>
 
-                {/* Category Buttons List */}
                 <div className="flex flex-wrap gap-3 font-semibold text-xs text-photohub-teal">
                   <button
                     onClick={() => setEquipCategory("all")}
@@ -482,7 +545,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SẮP XẾP Subbar */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-t border-photohub-teal/5 pt-4">
                 <div className="flex items-center gap-2 text-xs">
                   <span className="font-extrabold font-mono text-photohub-teal/50 uppercase">SẮP XẾP:</span>
@@ -516,67 +578,45 @@ export default function App() {
               </div>
             </div>
 
-            {/* Equipment Grid Cards */}
             {filteredEquipment.length === 0 ? (
-              <div className="bg-white border border-photohub-teal/5 rounded-2xl p-16 text-center text-photohub-muted">
-                Không tìm thấy thiết bị nào trong danh mục này.
+              <div className="text-center py-20 text-photohub-muted border border-dashed border-photohub-teal/10 rounded-2xl bg-white">
+                Không tìm thấy thiết bị nào phù hợp với danh mục tìm kiếm.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {filteredEquipment.map((p) => (
                   <div
                     key={p.id}
-                    className="bg-white border border-photohub-teal/10 rounded-2xl overflow-hidden hover:shadow-xl hover:border-photohub-teal/20 transition-all duration-300 flex flex-col group relative"
+                    className="bg-white border border-photohub-teal/10 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
                   >
-                    {/* Item Image with Green CÓ SẴN Badge */}
-                    <div className="h-56 bg-photohub-sand/50 relative overflow-hidden flex items-center justify-center p-6">
-                      <img
-                        src={p.avatar}
-                        alt={p.name}
-                        className="h-36 w-36 object-cover rounded-xl shadow-md group-hover:scale-105 transition-transform duration-300"
-                      />
+                    <img
+                      src={p.avatar}
+                      alt={p.name}
+                      className="h-56 w-full object-cover border-b border-photohub-teal/5"
+                    />
 
-                      {/* Availability badge */}
-                      <span className={`absolute top-4 left-4 text-[9px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${p.badge === "CÓ SẴN"
-                          ? "bg-emerald-600 text-white"
-                          : "bg-rose-600 text-white"
-                        }`}>
-                        {p.badge}
-                      </span>
+                    <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] bg-photohub-teal text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                            {p.category}
+                          </span>
+                          <div className="flex items-center gap-1 text-xs font-bold text-amber-500">
+                            <Star className="w-3.5 h-3.5 fill-amber-500" />
+                            <span>{p.rating}</span>
+                          </div>
+                        </div>
 
-                      {/* Float utility buttons right side */}
-                      <div className="absolute right-4 top-4 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <button
-                          onClick={() => handleProductSelect(p)}
-                          className="p-2 bg-white rounded-full text-photohub-teal shadow-md hover:bg-photohub-orange hover:text-white transition-colors cursor-pointer"
-                          title="Thuê Ngay"
-                        >
-                          <ShoppingBag className="w-4 h-4" />
-                        </button>
-                        <button
-                          className="p-2 bg-white rounded-full text-photohub-teal shadow-md hover:bg-photohub-orange hover:text-white transition-colors cursor-pointer"
-                          title="Chia sẻ"
-                        >
-                          <Share2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Content Detail Info */}
-                    <div className="p-6 flex-1 flex flex-col justify-between space-y-4">
-                      <div className="space-y-1.5">
-                        <span className="text-[9px] uppercase tracking-wider text-photohub-muted font-bold font-mono">
-                          {p.category}
-                        </span>
-                        <h3 className="font-extrabold text-base text-photohub-teal font-serif group-hover:text-photohub-orange transition-colors">
+                        <h3 className="font-bold text-lg text-photohub-teal font-serif">
                           {p.name}
                         </h3>
-                        <p className="text-xs text-photohub-muted line-clamp-2 leading-relaxed">
+
+                        <p className="text-xs text-photohub-muted leading-relaxed">
                           {p.desc}
                         </p>
 
                         <div className="flex flex-wrap gap-1 pt-1">
-                          {p.specs.slice(0, 2).map((spec, idx) => (
+                          {p.specs.map((spec, idx) => (
                             <span key={idx} className="text-[8px] bg-photohub-sand text-photohub-teal/70 px-1.5 py-0.5 rounded font-semibold uppercase font-mono">
                               {spec}
                             </span>
@@ -586,10 +626,10 @@ export default function App() {
 
                       <div className="flex items-center justify-between pt-3 border-t border-photohub-teal/5">
                         <div>
-                          <span className="text-[9px] text-photohub-muted font-bold uppercase tracking-wider">Giá thuê ngày</span>
+                          <span className="text-[9px] text-photohub-muted font-bold uppercase tracking-wider block font-serif">Giá thuê ngày</span>
                           <div className="text-base font-extrabold font-mono text-photohub-teal">
-                            ${p.price}
-                            <span className="text-[10px] font-semibold text-photohub-muted">/ngày</span>
+                            {p.price.toLocaleString('vi-VN')} đ
+                            <span className="text-[10px] font-semibold text-photohub-muted font-serif">/ngày</span>
                           </div>
                         </div>
 
@@ -621,7 +661,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Grid of Photographers */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {photographerProducts.map((p) => (
                 <div
@@ -666,8 +705,8 @@ export default function App() {
 
                     <div className="flex items-center justify-between pt-3 border-t border-photohub-teal/5">
                       <div>
-                        <span className="text-[9px] text-photohub-muted font-bold uppercase tracking-wider block">Chi phí buổi chụp</span>
-                        <span className="text-base font-extrabold font-mono text-photohub-teal">${p.price}/buổi</span>
+                        <span className="text-[9px] text-photohub-muted font-bold uppercase tracking-wider block font-serif">Chi phí buổi chụp</span>
+                        <span className="text-base font-extrabold font-mono text-photohub-teal">{p.price.toLocaleString('vi-VN')} đ/buổi</span>
                       </div>
 
                       <button
@@ -684,7 +723,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: ĐƠN HÀNG (WebSocket tracker ledger) */}
+        {/* TAB 3: ĐƠN HÀNG */}
         {activeTab === "orders" && (
           <div className="animate-fadeIn">
             <OrderHistory
@@ -720,7 +759,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Stats Box */}
               <div className="grid grid-cols-3 gap-4">
                 <div className="bg-photohub-sand/50 p-4 rounded-xl border border-photohub-teal/5 text-center">
                   <span className="text-[10px] text-photohub-muted font-bold uppercase tracking-wider block">ĐƠN ĐẶT LỊCH</span>
@@ -740,7 +778,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Contact Information */}
               <div className="space-y-4 pt-2">
                 <h3 className="text-sm font-bold text-photohub-teal uppercase tracking-wider font-serif">Thông Tin Liên Hệ</h3>
                 <div className="divide-y divide-photohub-teal/5 text-sm">
@@ -761,6 +798,162 @@ export default function App() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: GIỎ HÀNG */}
+        {activeTab === "cart" && (
+          <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto">
+            <div className="bg-white border border-photohub-teal/10 rounded-2xl p-6 md:p-8 space-y-6 shadow-md">
+              <div className="flex justify-between items-center border-b border-photohub-teal/5 pb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-photohub-teal font-serif">Giỏ Hàng Đặt Lịch</h2>
+                  <p className="text-xs text-photohub-muted">Quản lý và thanh toán đồng thời nhiều lịch đặt chụp</p>
+                </div>
+                <span className="text-[10px] bg-photohub-sand text-photohub-teal/70 px-2.5 py-1 rounded border border-photohub-teal/10 font-bold font-mono">
+                  {hookData.cartItems.length} Sản phẩm
+                </span>
+              </div>
+
+              {hookData.cartItems.length === 0 ? (
+                <div className="text-center py-20 text-photohub-muted text-xs border border-dashed border-photohub-teal/10 rounded-xl bg-photohub-sand/20 space-y-3">
+                  <ShoppingBag className="w-10 h-10 text-photohub-teal/10 mx-auto animate-bounce" />
+                  <p className="font-semibold">Giỏ hàng của bạn đang trống.</p>
+                  <button
+                    onClick={() => setActiveTab("equipment")}
+                    className="bg-photohub-teal text-white px-4 py-2 rounded-lg font-bold text-[10px] cursor-pointer"
+                  >
+                    Khám phá dịch vụ & thiết bị
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Select All Checkbox */}
+                  <div className="flex items-center gap-2 text-xs font-bold border-b border-photohub-teal/5 pb-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedCartIds.length === hookData.cartItems.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedCartIds(hookData.cartItems.map((item: any) => item.cartId));
+                        } else {
+                          setSelectedCartIds([]);
+                        }
+                      }}
+                      className="rounded border-photohub-teal/10 text-photohub-teal focus:ring-photohub-orange h-4 w-4 cursor-pointer"
+                    />
+                    <span>Chọn tất cả ({hookData.cartItems.length})</span>
+                  </div>
+
+                  <div className="divide-y divide-photohub-teal/5 space-y-4">
+                    {hookData.cartItems.map((item: any) => (
+                      <div key={item.cartId} className="flex gap-4 items-start pt-4 first:pt-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedCartIds.includes(item.cartId)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCartIds([...selectedCartIds, item.cartId]);
+                            } else {
+                              setSelectedCartIds(selectedCartIds.filter(id => id !== item.cartId));
+                            }
+                          }}
+                          className="mt-1.5 rounded border-photohub-teal/10 text-photohub-teal focus:ring-photohub-orange h-4 w-4 cursor-pointer"
+                        />
+                        
+                        <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="md:col-span-2 space-y-1">
+                            <h4 className="text-xs font-extrabold text-photohub-teal flex flex-wrap gap-2 items-center">
+                              {item.photographerName && (
+                                <span className="bg-photohub-orange/10 text-photohub-orange text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase">
+                                  📸 Thợ Ảnh: {item.photographerName}
+                                </span>
+                              )}
+                              {item.equipmentName && (
+                                <span className="bg-photohub-teal/10 text-photohub-teal text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase">
+                                  ⚙️ Thiết Bị: {item.equipmentName}
+                                </span>
+                              )}
+                            </h4>
+                            <p className="text-[10px] text-photohub-muted font-mono flex items-center gap-1 font-semibold">
+                              📅 {new Date(item.startDate).toLocaleDateString("vi-VN")} - {new Date(item.endDate).toLocaleDateString("vi-VN")} ({item.days} ngày)
+                            </p>
+                          </div>
+                          
+                          <div className="text-left md:text-right font-mono flex md:flex-col justify-between items-center md:items-end">
+                            <span className="text-[9px] text-photohub-muted font-bold block md:hidden">Tạm tính:</span>
+                            <span className="text-xs font-extrabold text-photohub-orange">
+                              {item.price.toLocaleString("vi-VN")} đ
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            hookData.removeFromCart(item.cartId);
+                            setSelectedCartIds(selectedCartIds.filter(id => id !== item.cartId));
+                          }}
+                          className="p-1.5 text-photohub-muted hover:text-rose-500 transition-colors cursor-pointer"
+                          title="Xóa khỏi giỏ hàng"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Summary Box */}
+                  <div className="border-t border-photohub-teal/5 pt-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-photohub-sand/35 p-5 rounded-2xl">
+                    <div>
+                      <span className="text-[10px] text-photohub-muted font-bold block uppercase tracking-wider font-mono">Đã chọn ({selectedCartIds.length} mục)</span>
+                      <span className="text-lg font-bold text-photohub-teal font-serif">
+                        Tổng tiền nhóm:{" "}
+                        <span className="text-photohub-orange font-mono">
+                          {hookData.cartItems
+                            .filter((item: any) => selectedCartIds.includes(item.cartId))
+                            .reduce((sum: number, item: any) => sum + item.price, 0)
+                            .toLocaleString("vi-VN")} đ
+                        </span>
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        const total = hookData.cartItems
+                          .filter((item: any) => selectedCartIds.includes(item.cartId))
+                          .reduce((sum: number, item: any) => sum + item.price, 0);
+
+                        setSelectedProduct({
+                          id: "cart",
+                          name: `Đơn hàng giỏ hàng (${selectedCartIds.length} lịch đặt)`,
+                          type: "cart",
+                          price: total,
+                          avatar: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=400",
+                          category: "cart"
+                        });
+                        
+                        await handleCartCheckoutSubmit(selectedCartIds);
+                      }}
+                      disabled={selectedCartIds.length === 0 || hookData.bookingLoading}
+                      className="bg-photohub-orange hover:bg-photohub-orange/95 text-white font-bold px-6 py-3 rounded-lg text-xs flex items-center gap-2 cursor-pointer shadow transition-transform active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {hookData.bookingLoading ? (
+                        <>
+                          <Loader className="w-4 h-4 animate-spin" />
+                          <span>Đang gửi đặt lịch...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Đặt lịch & Thanh toán nhóm</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -794,12 +987,14 @@ export default function App() {
                   className="h-16 w-16 object-cover rounded-lg border border-photohub-teal/10 shadow-sm"
                 />
                 <div className="space-y-1">
-                  <span className="text-[9px] bg-photohub-teal text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                  <span className="text-[9px] bg-photohub-teal text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider font-serif">
                     {selectedProduct.category}
                   </span>
                   <h4 className="font-bold text-base text-photohub-teal font-serif">{selectedProduct.name}</h4>
                   <div className="text-xs font-bold text-photohub-orange font-mono">
-                    ${selectedProduct.price}/{selectedProduct.type === "photographer" ? "buổi" : "ngày"}
+                    {selectedProduct.type === "cart" 
+                      ? `${selectedProduct.price.toLocaleString('vi-VN')} đ` 
+                      : `${selectedProduct.price.toLocaleString('vi-VN')} đ/${selectedProduct.type === "photographer" ? "buổi" : "ngày"}`}
                   </div>
                 </div>
               </div>
@@ -808,7 +1003,7 @@ export default function App() {
                 /* SePay Payment Box */
                 (() => {
                   const currentBookingState = hookData.myBookings.find(b => b.id === createdBooking?.id);
-                  const isPaid = currentBookingState?.status === "approved" || currentBookingState?.status === "ongoing" || currentBookingState?.status === "completed";
+                  const isPaid = currentBookingState?.status === "approved" || currentBookingState?.status === "ongoing" || currentBookingState?.status === "completed" || createdBooking?.status === "approved";
 
                   return (
                     <div className="space-y-6 text-xs text-photohub-teal">
@@ -869,7 +1064,7 @@ export default function App() {
                                 {/* QR VietQR code container */}
                                 <div className="flex flex-col items-center gap-2 bg-white p-3 rounded-lg border border-photohub-teal/10 shadow-sm">
                                   <img
-                                    src={`https://img.vietqr.io/image/${sepayConfig.bankId}-${sepayConfig.accountNo}-compact2.png?amount=${Math.round(createdBooking.total_price * 25400)}&addInfo=PH${createdBooking.id.substring(0, 8)}&accountName=${encodeURIComponent(sepayConfig.accountName)}`}
+                                    src={`https://img.vietqr.io/image/${sepayConfig.bankId}-${sepayConfig.accountNo}-compact2.png?amount=${Math.round(createdBooking.total_price)}&addInfo=${createdBooking.isBatch ? createdBooking.id : `PH${createdBooking.id.substring(0, 8)}`}&accountName=${encodeURIComponent(sepayConfig.accountName)}`}
                                     alt="VietQR SePay Payment"
                                     className="h-40 w-40 object-contain"
                                   />
@@ -893,13 +1088,13 @@ export default function App() {
                                   <div>
                                     <span className="text-[9px] text-photohub-muted block uppercase font-bold tracking-wide">Số tiền chuyển khoản</span>
                                     <span className="text-xs font-mono font-bold text-photohub-orange">
-                                      ${createdBooking.total_price}.00 ≈ {Math.round(createdBooking.total_price * 25400).toLocaleString('vi-VN')} VND
+                                      {createdBooking.total_price.toLocaleString('vi-VN')} đ
                                     </span>
                                   </div>
                                   <div className="bg-white p-2.5 rounded border border-photohub-teal/5">
                                     <span className="text-[9px] text-photohub-muted block uppercase font-bold tracking-wide">Nội dung chuyển khoản (bắt buộc)</span>
                                     <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded select-all">
-                                      PH{createdBooking.id.substring(0, 8)}
+                                      {createdBooking.isBatch ? createdBooking.id : `PH${createdBooking.id.substring(0, 8)}`}
                                     </span>
                                   </div>
                                 </div>
@@ -920,7 +1115,7 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={() => handleConfirmCashPayment(createdBooking.id)}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-lg text-xs cursor-pointer shadow transition-all duration-200"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-lg text-xs cursor-pointer shadow transition-all duration-200 font-serif"
                               >
                                 Xác nhận giữ chỗ & Thanh toán tiền mặt
                               </button>
@@ -935,7 +1130,7 @@ export default function App() {
                             >
                               Hủy Đặt Lịch
                             </button>
-                            <div className="text-right text-[10px] text-photohub-muted leading-relaxed font-mono">
+                            <div className="text-right text-[10px] text-photohub-muted leading-relaxed font-mono font-semibold">
                               {checkoutPaymentMethod === "vietqr" ? (
                                 <>
                                   ⏳ Hệ thống đang lắng nghe giao dịch qua SePay...
@@ -951,12 +1146,12 @@ export default function App() {
                           </div>
                         </>
                       ) : (
-                        <div className="text-center py-6 space-y-4">
+                        <div className="text-center py-6 space-y-4 animate-scaleUp">
                           <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shadow-md">
-                            <CheckCircle className="w-8 h-8" />
+                            <CheckCircle className="w-8 h-8 font-extrabold" />
                           </div>
                           <h4 className="text-lg font-bold font-serif text-photohub-teal">Thanh Toán Thành Công!</h4>
-                          <p className="text-xs text-photohub-muted max-w-sm mx-auto leading-relaxed">
+                          <p className="text-xs text-photohub-muted max-w-sm mx-auto leading-relaxed font-serif">
                             Giao dịch của bạn đã được đối soát tự động qua SePay. Hệ thống đã xác nhận lịch chụp/thuê thiết bị.
                           </p>
                           <button
@@ -977,53 +1172,106 @@ export default function App() {
               ) : (
                 /* Form Input Block */
                 <form onSubmit={handleBookingSubmit} className="space-y-4">
-                  {/* Date Picker Range */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-photohub-teal flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-photohub-orange" />
-                        <span>Ngày bắt đầu</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={hookData.startDate}
-                        onChange={(e) => hookData.setStartDate(e.target.value)}
-                        className="w-full bg-photohub-sand border border-photohub-teal/10 rounded-lg p-3 text-photohub-teal text-xs focus:border-photohub-orange focus:outline-none"
-                        required
-                      />
+                  {selectedProduct.type === "cart" ? (
+                    <div className="bg-photohub-sand border border-photohub-teal/5 rounded-xl p-4 space-y-2 text-xs">
+                      <div className="text-photohub-muted font-bold uppercase tracking-wider font-serif mb-2">Chi tiết các lịch đặt nhóm</div>
+                      <div className="divide-y divide-photohub-teal/5">
+                        {hookData.cartItems
+                          .filter((item: any) => selectedCartIds.includes(item.cartId))
+                          .map((item: any) => (
+                            <div key={item.cartId} className="py-2 first:pt-0">
+                              <div className="font-bold text-photohub-teal flex justify-between">
+                                <span>
+                                  {item.photographerName && `📸 ${item.photographerName}`}
+                                  {item.photographerName && item.equipmentName && " + "}
+                                  {item.equipmentName && `⚙️ ${item.equipmentName}`}
+                                </span>
+                                <span className="font-mono text-photohub-orange font-bold">
+                                  {item.price.toLocaleString('vi-VN')} đ
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-photohub-muted font-mono mt-0.5">
+                                📅 {new Date(item.startDate).toLocaleDateString('vi-VN')} - {new Date(item.endDate).toLocaleDateString('vi-VN')} ({item.days} ngày)
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                      <div className="flex justify-between border-t border-photohub-teal/10 pt-2 font-bold text-sm text-photohub-teal mt-2">
+                        <span className="font-serif">Tổng tiền thanh toán nhóm:</span>
+                        <span className="text-photohub-orange text-base font-mono font-extrabold">
+                          {selectedProduct.price.toLocaleString('vi-VN')} đ
+                        </span>
+                      </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-photohub-teal flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-photohub-orange" />
-                        <span>Ngày trả máy / kết thúc</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={hookData.endDate}
-                        onChange={(e) => hookData.setEndDate(e.target.value)}
-                        className="w-full bg-photohub-sand border border-photohub-teal/10 rounded-lg p-3 text-photohub-teal text-xs focus:border-photohub-orange focus:outline-none"
-                        required
-                      />
-                    </div>
-                  </div>
+                  ) : (
+                    // standard Single Item Form
+                    <>
+                      {/* Date Picker Range */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-photohub-teal flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5 text-photohub-orange" />
+                            <span>Ngày bắt đầu</span>
+                          </label>
+                          <input
+                            type="date"
+                            value={hookData.startDate}
+                            onChange={(e) => hookData.setStartDate(e.target.value)}
+                            className="w-full bg-photohub-sand border border-photohub-teal/10 rounded-lg p-3 text-photohub-teal text-xs focus:border-photohub-orange focus:outline-none"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-photohub-teal flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5 text-photohub-orange" />
+                            <span>Ngày trả máy / kết thúc</span>
+                          </label>
+                          <input
+                            type="date"
+                            value={hookData.endDate}
+                            onChange={(e) => hookData.setEndDate(e.target.value)}
+                            className="w-full bg-photohub-sand border border-photohub-teal/10 rounded-lg p-3 text-photohub-teal text-xs focus:border-photohub-orange focus:outline-none"
+                            required
+                          />
+                        </div>
+                      </div>
 
-                  {/* Price Preview calculation box */}
-                  {hookData.calculatedDays > 0 && (
-                    <div className="bg-photohub-sand border border-photohub-teal/5 rounded-xl p-4 space-y-2 text-xs font-mono">
-                      <div className="text-photohub-muted font-bold uppercase tracking-wider font-serif mb-1">Thống kê giá tiền</div>
-                      <div className="flex justify-between text-photohub-teal/70">
-                        <span>Thời gian đặt:</span>
-                        <span className="font-bold">{hookData.calculatedDays} ngày</span>
-                      </div>
-                      <div className="flex justify-between text-photohub-teal/70">
-                        <span>Đơn giá:</span>
-                        <span className="font-bold">${selectedProduct.price}.00</span>
-                      </div>
-                      <div className="flex justify-between border-t border-photohub-teal/10 pt-2 font-bold text-sm text-photohub-teal">
-                        <span className="font-serif">Tổng giá tiền dự kiến:</span>
-                        <span className="text-photohub-orange text-base">${hookData.calculatedPrice.toFixed(2)}</span>
-                      </div>
-                    </div>
+                      {/* Occupied dates list indicator */}
+                      {hookData.unavailableDates.length > 0 && (
+                        <div className="text-photohub-teal text-[10px] space-y-1 border border-photohub-teal/10 p-2.5 rounded-lg bg-photohub-sand/50">
+                          <span className="font-bold text-photohub-orange font-serif">Các ngày đã bận:</span>
+                          <div className="flex flex-wrap gap-1 mt-1 font-mono">
+                            {hookData.unavailableDates.map((dateStr: string) => {
+                              const [year, month, day] = dateStr.split("-");
+                              return (
+                                <span key={dateStr} className="bg-white border border-photohub-teal/5 px-1.5 py-0.5 rounded text-[9.5px]">
+                                  {day}/{month}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Price Preview calculation box */}
+                      {hookData.calculatedDays > 0 && (
+                        <div className="bg-photohub-sand border border-photohub-teal/5 rounded-xl p-4 space-y-2 text-xs font-mono">
+                          <div className="text-photohub-muted font-bold uppercase tracking-wider font-serif mb-1">Thống kê giá tiền</div>
+                          <div className="flex justify-between text-photohub-teal/70">
+                            <span>Thời gian đặt:</span>
+                            <span className="font-bold">{hookData.calculatedDays} ngày</span>
+                          </div>
+                          <div className="flex justify-between text-photohub-teal/70">
+                            <span>Đơn giá:</span>
+                            <span className="font-bold">{selectedProduct.price.toLocaleString('vi-VN')} đ</span>
+                          </div>
+                          <div className="flex justify-between border-t border-photohub-teal/10 pt-2 font-bold text-sm text-photohub-teal">
+                            <span className="font-serif">Tổng giá tiền dự kiến:</span>
+                            <span className="text-photohub-orange text-base font-extrabold">{hookData.calculatedPrice.toLocaleString('vi-VN')} đ</span>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {/* Error/Success Feedbacks */}
@@ -1036,36 +1284,54 @@ export default function App() {
 
                   {hookData.errorMsg && (
                     <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-600 rounded-lg text-xs">
-                      <span className="font-semibold">Đặt lịch thất bại:</span> {hookData.errorMsg}
+                      <span className="font-semibold font-serif">Đặt lịch thất bại:</span> {hookData.errorMsg}
                     </div>
                   )}
 
                   {/* Confirm actions */}
-                  <div className="flex justify-end gap-3 pt-4 border-t border-photohub-teal/5">
+                  <div className="flex justify-between items-center pt-4 border-t border-photohub-teal/5">
                     <button
                       type="button"
                       onClick={handleCloseModal}
                       className="border border-photohub-teal/15 hover:bg-photohub-sand text-photohub-teal text-xs font-semibold px-4 py-2.5 rounded-lg cursor-pointer transition-colors"
                     >
-                      Hủy bỏ
+                      Đóng
                     </button>
-                    <button
-                      type="submit"
-                      disabled={hookData.bookingLoading}
-                      className="bg-photohub-orange hover:bg-photohub-orange/95 text-white text-xs font-bold px-6 py-2.5 rounded-lg flex items-center gap-1.5 transition-transform active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-md"
-                    >
-                      {hookData.bookingLoading ? (
-                        <>
-                          <Loader className="w-4 h-4 animate-spin" />
-                          <span>Đang xử lý...</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingBag className="w-4 h-4" />
-                          <span>Xác nhận đặt thuê</span>
-                        </>
+
+                    <div className="flex gap-2">
+                      {selectedProduct.type !== "cart" && (
+                        <button
+                          type="button"
+                          disabled={!hookData.startDate || !hookData.endDate || hookData.calculatedPrice === 0}
+                          onClick={() => {
+                            hookData.addToCart();
+                            handleCloseModal();
+                          }}
+                          className="bg-photohub-teal/10 hover:bg-photohub-teal/20 text-photohub-teal text-xs font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <ShoppingBag className="w-4 h-4 text-photohub-orange" />
+                          <span>Thêm vào Giỏ</span>
+                        </button>
                       )}
-                    </button>
+
+                      <button
+                        type="submit"
+                        disabled={hookData.bookingLoading}
+                        className="bg-photohub-orange hover:bg-photohub-orange/95 text-white text-xs font-bold px-6 py-2.5 rounded-lg flex items-center gap-1.5 transition-transform active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-md"
+                      >
+                        {hookData.bookingLoading ? (
+                          <>
+                            <Loader className="w-4 h-4 animate-spin" />
+                            <span>Đang xử lý...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-4 h-4" />
+                            <span>{selectedProduct.type === "cart" ? "Xác nhận Đặt nhóm" : "Đặt Ngay"}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </form>
               )}

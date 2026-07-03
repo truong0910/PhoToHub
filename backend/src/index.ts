@@ -102,7 +102,53 @@ const handleSepayIpn = async (req: express.Request, res: express.Response) => {
     // Retrieve clean supabase client with service role key to bypass RLS policies
     const supabase = getServiceRoleClient();
 
-    // Query pending bookings
+    // 1. Check if the code corresponds to a multi-item batch payment code
+    const { data: batchBookings, error: batchError } = await supabase
+      .from("bookings")
+      .select("id, status")
+      .ilike("payment_code", bookingPrefix);
+
+    if (batchError) throw batchError;
+
+    const { emailQueue } = await import("./queues/email.queue.js");
+
+    if (batchBookings && batchBookings.length > 0) {
+      const pendingBatch = batchBookings.filter((b) => b.status === "pending");
+      if (pendingBatch.length === 0) {
+        res.status(200).json({ success: true, message: "Batch bookings are already processed." });
+        return;
+      }
+
+      for (const b of pendingBatch) {
+        const { error: updateError } = await supabase
+          .from("bookings")
+          .update({ status: "approved" })
+          .eq("id", b.id);
+        
+        if (updateError) {
+          console.error(`Failed to approve batch booking ${b.id}:`, updateError.message);
+          continue;
+        }
+
+        try {
+          await emailQueue.add("send-email", {
+            bookingId: b.id,
+            type: "approved"
+          });
+        } catch (err: any) {
+          console.error("Failed to enqueue approval email:", err.message);
+        }
+      }
+
+      console.log(`✅ Batch bookings approved automatically for code '${bookingPrefix}' via SePay transaction.`);
+      res.status(200).json({
+        success: true,
+        message: `Batch bookings for code '${bookingPrefix}' successfully approved.`,
+      });
+      return;
+    }
+
+    // 2. Fallback to single booking ID prefix search
     const { data: bookings, error: selectError } = await supabase
       .from("bookings")
       .select("id, status")
@@ -117,12 +163,6 @@ const handleSepayIpn = async (req: express.Request, res: express.Response) => {
       return;
     }
 
-    // Check if already approved
-    if (targetBooking.status === "approved" || targetBooking.status === "ongoing" || targetBooking.status === "completed") {
-      res.status(200).json({ success: true, message: "Booking is already processed." });
-      return;
-    }
-
     // Update status to approved
     const { error: updateError } = await supabase
       .from("bookings")
@@ -130,6 +170,16 @@ const handleSepayIpn = async (req: express.Request, res: express.Response) => {
       .eq("id", targetBooking.id);
 
     if (updateError) throw updateError;
+
+    // Send email notification for single booking approval
+    try {
+      await emailQueue.add("send-email", {
+        bookingId: targetBooking.id,
+        type: "approved"
+      });
+    } catch (err: any) {
+      console.error("Failed to enqueue approval email:", err.message);
+    }
 
     console.log(`✅ Booking ID '${targetBooking.id}' approved automatically via SePay transaction.`);
 

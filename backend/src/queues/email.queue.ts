@@ -65,7 +65,7 @@ export const emailQueue = {
         if (data.type === "created") {
           statusMessageHtml = `
             <p>Đơn đặt lịch chụp/thuê thiết bị <strong>#${booking.id}</strong> của bạn đã được ghi nhận thành công trên hệ thống!</p>
-            <p><strong>Tổng tiền:</strong> $${booking.total_price}.00</p>
+            <p><strong>Tổng tiền:</strong> ${(Number(booking.total_price)).toLocaleString('vi-VN')} đ</p>
             <p style="color: #E06C45; font-weight: bold;">⚠️ Vui lòng hoàn tất thanh toán trong vòng 1 phút để giữ lịch hẹn của bạn.</p>
           `;
         } else if (data.type === "approved") {
