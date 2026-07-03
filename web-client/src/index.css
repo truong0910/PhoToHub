@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Playfair Display", serif;
+  --font-sans: "Inter", sans-serif;
+  
+  --color-photohub-teal: #0B2530;      /* Cinematic deep teal */
+  --color-photohub-sand: #F4F0EA;      /* Film-tone warm sand */
+  --color-photohub-surface: #FFFFFF;   /* Clean white for client cards */
+  --color-photohub-surface-dark: #153542; /* Dark teal surface */
+  --color-photohub-orange: #E06A3B;    /* Warm burnt orange accent */
+  --color-photohub-muted: #6E8388;     /* Muted sage */
+  
+  --color-status-pending: #D97706;
+  --color-status-approved: #0D9488;
+  --color-status-ongoing: #2563EB;
+  --color-status-completed: #4F46E5;
+  --color-status-cancelled: #DC2626;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--color-photohub-sand);
+    color: var(--color-photohub-teal);
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-serif);
+  }
+}
+
+/* Custom Webkit scrollbars styling to match vintage warm mood */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-photohub-sand);
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-photohub-muted);
+}

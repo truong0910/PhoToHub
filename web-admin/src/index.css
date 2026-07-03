@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Playfair Display", serif;
+  --font-sans: "Inter", sans-serif;
+  
+  --color-zinc-950: #F8FAFC; /* Soft Slate 50 background */
+  --color-zinc-900: #FFFFFF; /* Pure White card surface */
+  --color-zinc-850: #F1F5F9; /* Sub-elements hover */
+  --color-zinc-800: #E2E8F0; /* Slate 200 borders */
+  --color-zinc-700: #CBD5E1; /* Slate 300 accent borders */
+  --color-zinc-600: #94A3B8; /* Slate 400 helper text */
+  --color-zinc-500: #64748B; /* Slate 500 secondary text */
+  --color-zinc-400: #475569; /* Slate 600 body text */
+  --color-zinc-300: #334155; /* Slate 700 main body text */
+  --color-zinc-200: #1E293B; /* Slate 800 title text */
+  --color-zinc-100: #0F172A; /* Slate 900 headers */
+  --color-zinc-50: #0F172A;  /* Slate 900 primary text */
+  --color-slate-50: #0F172A;  /* Slate 900 CTA background */
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--color-zinc-950);
+    color: var(--color-zinc-50);
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-serif);
+  }
+}
+
+/* Custom Scrollbar for Sleek Dark Mode */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-zinc-950);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-zinc-800);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-zinc-700);
+}
