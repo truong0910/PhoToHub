@@ -53,21 +53,22 @@ export class BookingController {
       const errMsg = error.message || "";
       let status = 500;
 
-      if (errMsg.includes("Validation Error:")) {
+      if (errMsg.includes("Validation Error:") || errMsg.includes("Lỗi Xác thực:")) {
         status = 400;
       } else if (
         errMsg.includes("Lock Acquisition Conflict:") ||
         errMsg.includes("Availability Error:") ||
-        errMsg.includes("already booked")
+        errMsg.includes("already booked") ||
+        errMsg.includes("bận trong khoảng")
       ) {
         status = 409;
-      } else if (errMsg.includes("Profile Error:")) {
+      } else if (errMsg.includes("Profile Error:") || errMsg.includes("Lỗi Hồ sơ:")) {
         status = 404;
       }
 
       res.status(status).json({
         success: false,
-        error: errMsg.replace(/^(Validation Error:|Lock Acquisition Conflict:|Availability Error:|Profile Error:)\s*/i, "") || "An internal error occurred during the booking request.",
+        error: errMsg.replace(/^(Validation Error:|Lock Acquisition Conflict:|Availability Error:|Profile Error:)\s*/i, "") || "Đã xảy ra lỗi hệ thống khi xử lý yêu cầu đặt lịch.",
       });
     }
   }

@@ -25,9 +25,9 @@ export async function createBookingStep(context: BookingPipelineContext): Promis
     // Intercept PostgreSQL GIST exclusion constraint violation (error code '23P01')
     if (insertError.code === "23P01") {
       console.warn("⚠️ PostgreSQL GIST exclusion constraint triggered! Overlapping booking prevented at DB level.");
-      throw new Error("Availability Error: The requested slot overlaps with an existing active booking (Exclusion Violation).");
+      throw new Error("Availability Error: Khung thời gian bạn yêu cầu trùng với một lịch bận đã có sẵn (Ràng buộc Trùng lặp).");
     }
-    throw new Error(`Database Error: Failed to create booking: ${insertError.message}`);
+    throw new Error(`Database Error: Lỗi tạo đơn đặt lịch trên cơ sở dữ liệu: ${insertError.message}`);
   }
 
   context.resultBooking = created;

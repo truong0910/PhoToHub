@@ -12,6 +12,7 @@ export function useUserBooking() {
   const [photographers, setPhotographers] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
   const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [myEquipment, setMyEquipment] = useState<any[]>([]);
 
   // Selection form states
   const [selectedPhotographer, setSelectedPhotographer] = useState("");
@@ -57,6 +58,7 @@ export function useUserBooking() {
         setClientId(null);
         setClientProfile(null);
         setMyBookings([]);
+        setMyEquipment([]);
         setLoading(false);
       }
     });
@@ -89,14 +91,16 @@ export function useUserBooking() {
     async function loadData() {
       try {
         setLoading(true);
-        const [photoData, equipData, bookingsData] = await Promise.all([
+        const [photoData, equipData, bookingsData, myEquipData] = await Promise.all([
           UserBookingSource.fetchPhotographers(),
           UserBookingSource.fetchAvailableEquipment(),
           UserBookingSource.fetchUserBookings(clientId!),
+          UserBookingSource.fetchMyEquipment(clientId!),
         ]);
         setPhotographers(photoData);
         setEquipmentList(equipData);
         setMyBookings(bookingsData);
+        setMyEquipment(myEquipData);
       } catch (err: any) {
         console.error("Hook initial load failure:", err);
         setErrorMsg(err.message || "Failed to load database dependencies.");
@@ -366,12 +370,69 @@ export function useUserBooking() {
     }
   };
 
+  // 8. Owner Equipment Registration Actions
+  const handleRegisterEquipment = async (name: string, category: string, pricePerDay: number, imageFile: File) => {
+    if (!clientId) return;
+    setBookingLoading(true);
+    try {
+      await UserBookingSource.registerEquipment(name, category, pricePerDay, imageFile, clientId);
+      const [equipData, myEquipData] = await Promise.all([
+        UserBookingSource.fetchAvailableEquipment(),
+        UserBookingSource.fetchMyEquipment(clientId)
+      ]);
+      setEquipmentList(equipData);
+      setMyEquipment(myEquipData);
+      alert("Đăng ký thiết bị cho thuê thành công!");
+    } catch (err: any) {
+      console.error("Error registering equipment:", err);
+      alert("Đăng ký thiết bị thất bại: " + err.message);
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  const handleToggleEquipmentStatus = async (equipId: string, currentStatus: "available" | "maintenance") => {
+    if (!clientId) return;
+    const newStatus = currentStatus === "available" ? "maintenance" : "available";
+    try {
+      await UserBookingSource.updateEquipmentStatus(equipId, newStatus);
+      const [equipData, myEquipData] = await Promise.all([
+        UserBookingSource.fetchAvailableEquipment(),
+        UserBookingSource.fetchMyEquipment(clientId)
+      ]);
+      setEquipmentList(equipData);
+      setMyEquipment(myEquipData);
+    } catch (err: any) {
+      console.error("Error toggling status:", err);
+      alert("Cập nhật trạng thái thiết bị thất bại: " + err.message);
+    }
+  };
+
+  const handleDeleteEquipment = async (equipId: string) => {
+    if (!clientId) return;
+    if (!window.confirm("Bạn có chắc chắn muốn xóa thiết bị cho thuê này?")) return;
+    try {
+      await UserBookingSource.deleteEquipment(equipId);
+      const [equipData, myEquipData] = await Promise.all([
+        UserBookingSource.fetchAvailableEquipment(),
+        UserBookingSource.fetchMyEquipment(clientId)
+      ]);
+      setEquipmentList(equipData);
+      setMyEquipment(myEquipData);
+      alert("Xóa thiết bị thành công!");
+    } catch (err: any) {
+      console.error("Error deleting equipment:", err);
+      alert("Xóa thiết bị thất bại: " + err.message);
+    }
+  };
+
   return {
     clientId,
     clientProfile,
     photographers,
     equipmentList,
     myBookings,
+    myEquipment,
     selectedPhotographer,
     setSelectedPhotographer,
     selectedEquipment,
@@ -393,5 +454,8 @@ export function useUserBooking() {
     checkoutCart,
     submitBooking,
     refreshBookings,
+    handleRegisterEquipment,
+    handleToggleEquipmentStatus,
+    handleDeleteEquipment,
   };
 }

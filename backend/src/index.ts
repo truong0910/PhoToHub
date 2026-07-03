@@ -71,10 +71,13 @@ const handleSepayIpn = async (req: express.Request, res: express.Response) => {
     const authHeader = req.headers["authorization"];
     const sepaySecret = process.env.SEPAY_SECRET_KEY;
 
+    console.log(`💳 [SePay Webhook] Incoming auth header: "${authHeader}", expected secret: "${sepaySecret}"`);
+
     if (sepaySecret && authHeader) {
       const token = authHeader.replace(/^(Apikey|Bearer)\s+/i, "").trim();
-      if (token !== sepaySecret.trim()) {
-        console.warn("⚠️ Unauthorized SePay Webhook attempt. Invalid Secret Key.");
+      const expected = sepaySecret.trim();
+      if (token !== expected && authHeader.trim() !== expected) {
+        console.warn(`⚠️ Unauthorized SePay Webhook attempt. token: "${token}" !== secret: "${expected}"`);
         res.status(401).json({ success: false, error: "Unauthorized Secret Key." });
         return;
       }
@@ -90,8 +93,8 @@ const handleSepayIpn = async (req: express.Request, res: express.Response) => {
       return;
     }
 
-    // Extract booking ID prefix using regex matching
-    const match = content.match(/PH([a-fA-F0-9]{8})/);
+    // Extract booking ID prefix using regex matching (supports both 8-char single IDs and 4-char batch codes)
+    const match = content.match(/PH([a-zA-Z0-9]{4,8})/);
     if (!match) {
       res.status(400).json({ success: false, error: "Invalid transfer note format. Code should start with PH." });
       return;
@@ -106,7 +109,7 @@ const handleSepayIpn = async (req: express.Request, res: express.Response) => {
     const { data: batchBookings, error: batchError } = await supabase
       .from("bookings")
       .select("id, status")
-      .ilike("payment_code", bookingPrefix);
+      .ilike("payment_code", `PH${bookingPrefix}`);
 
     if (batchError) throw batchError;
 
@@ -226,7 +229,7 @@ app.get("/payments/sepay-info", async (req, res) => {
             bankId: primaryAccount.bank_short_name || "VietinBank",
             accountNo: primaryAccount.account_number || "",
             accountName: primaryAccount.account_holder_name || "",
-            timeoutDurationMs: 1 * 60 * 1000
+            timeoutDurationMs: 15 * 60 * 1000
           };
           console.log("💳 Dynamic SePay bank account details resolved:", cachedSepayInfo);
           res.status(200).json({ success: true, data: cachedSepayInfo });
@@ -242,10 +245,10 @@ app.get("/payments/sepay-info", async (req, res) => {
   res.status(200).json({
     success: true,
     data: {
-      bankId: process.env.SEPAY_BANK_ID || "",
-      accountNo: process.env.SEPAY_ACCOUNT_NO || "",
-      accountName: process.env.SEPAY_ACCOUNT_NAME || "",
-      timeoutDurationMs: 1 * 60 * 1000
+      bankId: process.env.SEPAY_BANK_ID || "VietinBank",
+      accountNo: process.env.SEPAY_ACCOUNT_NO || "100876557731",
+      accountName: process.env.SEPAY_ACCOUNT_NAME || "NGUYEN ANH XUAN TRUONG",
+      timeoutDurationMs: 15 * 60 * 1000
     }
   });
 });

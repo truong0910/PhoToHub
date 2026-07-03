@@ -14,7 +14,7 @@ export async function checkAvailabilityStep(context: BookingPipelineContext): Pr
     .single();
 
   if (clientErr || !clientProfile) {
-    throw new Error(`Profile Error: Client profile with ID '${client_id}' not found.`);
+    throw new Error(`Profile Error: Không tìm thấy hồ sơ khách hàng với ID '${client_id}'.`);
   }
 
   let priceAccumulated = 0;
@@ -28,11 +28,11 @@ export async function checkAvailabilityStep(context: BookingPipelineContext): Pr
       .single();
 
     if (equipErr || !equip) {
-      throw new Error(`Availability Error: Equipment with ID '${equipment_id}' not found.`);
+      throw new Error(`Availability Error: Không tìm thấy thiết bị với ID '${equipment_id}'.`);
     }
 
     if (equip.status !== "available") {
-      throw new Error(`Availability Error: Equipment '${equip.name}' is currently not available (Status: '${equip.status}').`);
+      throw new Error(`Availability Error: Thiết bị '${equip.name}' hiện tại không sẵn sàng để thuê (Trạng thái: '${equip.status}').`);
     }
 
     // Check overlap bookings
@@ -46,11 +46,11 @@ export async function checkAvailabilityStep(context: BookingPipelineContext): Pr
       .limit(1);
 
     if (overlapEquipErr) {
-      throw new Error(`Database Error: Failed to check equipment availability: ${overlapEquipErr.message}`);
+      throw new Error(`Database Error: Lỗi khi kiểm tra tính khả dụng của thiết bị: ${overlapEquipErr.message}`);
     }
 
     if (overlapEquip && overlapEquip.length > 0) {
-      throw new Error(`Availability Error: Equipment '${equip.name}' is already booked or scheduled during the requested timeframe.`);
+      throw new Error(`Availability Error: Thiết bị '${equip.name}' đã có lịch đặt hoặc bận trong khoảng thời gian yêu cầu.`);
     }
 
     // Calculate days rounded up
@@ -67,11 +67,11 @@ export async function checkAvailabilityStep(context: BookingPipelineContext): Pr
       .single();
 
     if (photogErr || !photog) {
-      throw new Error(`Availability Error: Photographer profile with ID '${photographer_id}' not found.`);
+      throw new Error(`Availability Error: Không tìm thấy thợ chụp ảnh với ID '${photographer_id}'.`);
     }
 
     if (photog.role !== "photographer" && photog.role !== "admin") {
-      throw new Error(`Availability Error: Profile ID '${photographer_id}' is not a registered photographer/admin.`);
+      throw new Error(`Availability Error: Tài khoản ID '${photographer_id}' không phải là nhiếp ảnh gia.`);
     }
 
     // Check overlap bookings
@@ -85,16 +85,16 @@ export async function checkAvailabilityStep(context: BookingPipelineContext): Pr
       .limit(1);
 
     if (overlapPhotogErr) {
-      throw new Error(`Database Error: Failed to check photographer availability: ${overlapPhotogErr.message}`);
+      throw new Error(`Database Error: Lỗi khi kiểm tra lịch bận của thợ chụp ảnh: ${overlapPhotogErr.message}`);
     }
 
     if (overlapPhotog && overlapPhotog.length > 0) {
-      throw new Error(`Availability Error: Photographer '${photog.full_name}' is already scheduled during the requested timeframe.`);
+      throw new Error(`Availability Error: Thợ ảnh '${photog.full_name}' đã có lịch chụp bận trong khoảng thời gian yêu cầu.`);
     }
 
     // Calculate days rounded up
     const diffDays = Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / (1000 * 60 * 60 * 24));
-    priceAccumulated += diffDays * (Number(photog.base_price) || 150.00);
+    priceAccumulated += diffDays * (Number(photog.base_price) || 1500000);
   }
 
   context.totalPrice = priceAccumulated;

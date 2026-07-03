@@ -12,7 +12,7 @@ export async function emitEventStep(context: BookingPipelineContext): Promise<vo
   }
 
   // 1. Queue delayed timeout cancellation in BullMQ (15 minutes = 15 * 60 * 1000 milliseconds)
-  const timeoutMs = 1 * 60 * 1000;
+  const timeoutMs = 15 * 60 * 1000;
   try {
     await bookingTimeoutQueue.add(
       "cancel-booking",

@@ -95,6 +95,13 @@ export default function App() {
   // Selected payment method in checkout modal: 'vietqr' | 'cash'
   const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState<"vietqr" | "cash">("vietqr");
 
+  // Equipment upload form local states
+  const [equipNameInput, setEquipNameInput] = useState("");
+  const [equipCategoryInput, setEquipCategoryInput] = useState("body");
+  const [equipPriceInput, setEquipPriceInput] = useState<number | "">("");
+  const [equipImageFile, setEquipImageFile] = useState<File | null>(null);
+  const [equipFormLoading, setEquipFormLoading] = useState(false);
+
   // Fetch active bank details on mount
   useEffect(() => {
     const loadSepayConfig = async () => {
@@ -275,6 +282,41 @@ export default function App() {
     }
   };
 
+  const handleRegisterEquipSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!equipNameInput.trim()) {
+      alert("Vui lòng nhập tên thiết bị.");
+      return;
+    }
+    if (!equipPriceInput || Number(equipPriceInput) <= 0) {
+      alert("Vui lòng nhập giá cho thuê hợp lệ.");
+      return;
+    }
+    if (!equipImageFile) {
+      alert("Vui lòng tải lên một tệp hình ảnh từ máy tính.");
+      return;
+    }
+
+    setEquipFormLoading(true);
+    try {
+      await hookData.handleRegisterEquipment(
+        equipNameInput,
+        equipCategoryInput,
+        Number(equipPriceInput),
+        equipImageFile
+      );
+      setEquipNameInput("");
+      setEquipPriceInput("");
+      setEquipImageFile(null);
+      const fileInput = document.getElementById("equip-file-upload") as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEquipFormLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -302,7 +344,7 @@ export default function App() {
 
   // If photographer, render photographer dashboard directly
   if (clientRole === "photographer") {
-    return <PhotographerDashboard currentUserId={hookData.clientId} clientName={clientName} />;
+    return <PhotographerDashboard hookData={hookData} currentUserId={hookData.clientId} clientName={clientName} />;
   }
 
   // 3. Process photographer products
@@ -363,7 +405,7 @@ export default function App() {
               <Sparkles className="w-5 h-5 text-photohub-orange fill-photohub-orange" />
               <span>PhotoHub</span>
             </h1>
-            <span className="text-[10px] uppercase tracking-widest text-photohub-muted font-bold font-mono">Studio & Rental Store</span>
+            <span className="text-[10px] uppercase tracking-widest text-photohub-muted font-bold font-mono font-serif">Studio & Rental Store</span>
           </div>
         </div>
 
@@ -430,7 +472,7 @@ export default function App() {
         <div className="flex items-center gap-4">
           <div className="hidden sm:block text-right">
             <div className="text-xs font-bold text-photohub-teal">{clientName}</div>
-            <div className="text-[9px] uppercase tracking-wider text-photohub-orange font-bold font-mono font-serif">Hạng {clientRole === "admin" ? "Admin" : "Thành Viên"}</div>
+            <div className="text-[9px] uppercase tracking-wider text-photohub-orange font-bold font-mono">Hạng {clientRole === "admin" ? "Admin" : "Thành Viên"}</div>
           </div>
           <button
             onClick={() => setActiveTab("profile")}
@@ -502,7 +544,7 @@ export default function App() {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-extrabold text-photohub-teal uppercase tracking-widest font-mono">DANH MỤC</span>
-                  <span className="text-xs text-photohub-muted font-bold font-mono font-serif">Hiển thị {filteredEquipment.length} sản phẩm</span>
+                  <span className="text-xs text-photohub-muted font-bold font-mono">Hiển thị {filteredEquipment.length} sản phẩm</span>
                 </div>
 
                 <div className="flex flex-wrap gap-3 font-semibold text-xs text-photohub-teal">
@@ -626,10 +668,10 @@ export default function App() {
 
                       <div className="flex items-center justify-between pt-3 border-t border-photohub-teal/5">
                         <div>
-                          <span className="text-[9px] text-photohub-muted font-bold uppercase tracking-wider block font-serif">Giá thuê ngày</span>
+                          <span className="text-[9px] text-photohub-muted font-bold uppercase tracking-wider block">Giá thuê ngày</span>
                           <div className="text-base font-extrabold font-mono text-photohub-teal">
                             {p.price.toLocaleString('vi-VN')} đ
-                            <span className="text-[10px] font-semibold text-photohub-muted font-serif">/ngày</span>
+                            <span className="text-[10px] font-semibold text-photohub-muted">/ngày</span>
                           </div>
                         </div>
 
@@ -797,6 +839,146 @@ export default function App() {
                     </span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* ĐĂNG KÝ / QUẢN LÝ THIẾT BỊ CHO THUÊ CỦA TÔI */}
+            <div className="bg-white border border-photohub-teal/10 rounded-2xl p-8 space-y-6 shadow-md mt-6">
+              <div className="border-b border-photohub-teal/5 pb-4">
+                <h3 className="text-lg font-bold font-serif text-photohub-teal flex items-center gap-2">
+                  <ShoppingBag className="w-5 h-5 text-photohub-orange" />
+                  <span>Thiết Bị Cho Thuê Của Tôi</span>
+                </h3>
+                <p className="text-xs text-photohub-muted font-mono leading-relaxed mt-1">
+                  Đăng ký thiết bị cá nhân của bạn để cho người dùng hoặc thợ chụp khác thuê. Tất cả ảnh được tải trực tiếp từ máy của bạn lên máy chủ lưu trữ.
+                </p>
+              </div>
+
+              {/* Form Đăng ký mới */}
+              <form onSubmit={handleRegisterEquipSubmit} className="space-y-4 text-xs bg-photohub-sand/20 p-5 rounded-xl border border-photohub-teal/5">
+                <h4 className="font-bold text-photohub-teal uppercase tracking-wider text-[10px] mb-2 block font-serif">Đăng ký thiết bị mới</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="font-semibold text-photohub-teal">Tên thiết bị</label>
+                    <input
+                      type="text"
+                      value={equipNameInput}
+                      onChange={(e) => setEquipNameInput(e.target.value)}
+                      placeholder="Ví dụ: Sony A7 IV, Lens 24-70mm GM..."
+                      className="w-full bg-white border border-photohub-teal/10 rounded-lg p-2.5 text-photohub-teal focus:border-photohub-orange focus:outline-none"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-semibold text-photohub-teal">Danh mục</label>
+                    <select
+                      value={equipCategoryInput}
+                      onChange={(e) => setEquipCategoryInput(e.target.value)}
+                      className="w-full bg-white border border-photohub-teal/10 rounded-lg p-2.5 text-photohub-teal focus:border-photohub-orange focus:outline-none"
+                    >
+                      <option value="body">Máy Ảnh (Body) 📸</option>
+                      <option value="lens">Lens / Pin / Sạc 🔋</option>
+                      <option value="lighting">Thiết Bị Ánh Sáng / Khác 🎧</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-semibold text-photohub-teal">Đơn giá thuê (VNĐ/ngày)</label>
+                    <input
+                      type="number"
+                      value={equipPriceInput}
+                      onChange={(e) => setEquipPriceInput(e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="Ví dụ: 300000"
+                      min="1000"
+                      className="w-full bg-white border border-photohub-teal/10 rounded-lg p-2.5 text-photohub-teal focus:border-photohub-orange focus:outline-none font-mono"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-photohub-teal block">Tải ảnh thiết bị lên từ máy tính</label>
+                  <input
+                    id="equip-file-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        setEquipImageFile(e.target.files[0]);
+                      }
+                    }}
+                    className="w-full bg-white border border-photohub-teal/10 rounded-lg p-2.5 text-photohub-teal focus:border-photohub-orange focus:outline-none file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-photohub-teal/10 file:text-photohub-teal hover:file:bg-photohub-teal/20"
+                    required
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={equipFormLoading}
+                    className="bg-photohub-orange hover:bg-photohub-orange/95 text-white font-bold px-5 py-2 rounded-lg transition-transform active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-md flex items-center gap-1.5"
+                  >
+                    {equipFormLoading ? (
+                      <>
+                        <Loader className="w-3.5 h-3.5 animate-spin" />
+                        <span>Đang tải lên & Đăng ký...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        <span>Đăng ký thiết bị</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              {/* Danh sách thiết bị hiện tại */}
+              <div className="space-y-3 pt-2">
+                <h4 className="font-bold text-photohub-teal uppercase tracking-wider text-[10px] block font-serif">Danh sách thiết bị đang đăng ký</h4>
+                
+                {hookData.myEquipment.length === 0 ? (
+                  <p className="text-center text-photohub-muted py-6 font-semibold border border-dashed border-photohub-teal/10 rounded-lg bg-photohub-sand/10">
+                    Bạn chưa đăng ký cho thuê thiết bị nào.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {hookData.myEquipment.map((eq: any) => (
+                      <div key={eq.id} className="border border-photohub-teal/15 p-3 rounded-lg flex gap-3 items-center bg-white shadow-sm hover:shadow-md transition-shadow">
+                        <img
+                          src={eq.image_url || "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=400"}
+                          alt={eq.name}
+                          className="h-14 w-14 object-cover rounded-md border border-photohub-teal/10"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h5 className="font-bold text-photohub-teal truncate text-xs">{eq.name}</h5>
+                          <p className="text-[10px] text-photohub-muted capitalize font-semibold">{eq.category === "body" ? "Body Máy Ảnh 📸" : eq.category === "lens" ? "Lens / Pin 🔋" : "Ánh Sáng 🎧"}</p>
+                          <p className="text-[10px] text-photohub-orange font-mono font-bold">{(Number(eq.price_per_day)).toLocaleString("vi-VN")} đ/ngày</p>
+                        </div>
+                        <div className="flex flex-col gap-2 items-end">
+                          <button
+                            type="button"
+                            onClick={() => hookData.handleToggleEquipmentStatus(eq.id, eq.status)}
+                            className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border cursor-pointer ${
+                              eq.status === "available"
+                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                            }`}
+                          >
+                            {eq.status === "available" ? "Sẵn sàng" : "Đang bảo trì"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => hookData.handleDeleteEquipment(eq.id)}
+                            className="text-photohub-muted hover:text-rose-500 transition-colors p-1 cursor-pointer"
+                            title="Xóa thiết bị"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

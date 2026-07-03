@@ -37,7 +37,7 @@ export const bookingTimeoutQueue = {
     }
 
     // In-Memory Fallback Scheduler
-    const delay = options?.delay || 1 * 60 * 1000;
+    const delay = options?.delay || 15 * 60 * 1000;
     console.log(`📥 [In-Memory Queue] Scheduled delayed cancel-booking (delay: ${delay}ms) for ID: ${data.bookingId}`);
 
     setTimeout(async () => {

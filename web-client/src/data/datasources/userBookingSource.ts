@@ -140,4 +140,114 @@ export class UserBookingSource {
 
     return data || [];
   }
+
+  /**
+   * Upload equipment image to Supabase Storage bucket 'equipment'.
+   */
+  static async uploadEquipmentImage(file: File): Promise<string> {
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+    const filePath = `equipment-images/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("equipment")
+      .upload(filePath, file);
+
+    if (uploadError) {
+      console.error("Error uploading image to Supabase Storage:", uploadError);
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from("equipment")
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  }
+
+  /**
+   * Register a new piece of equipment for rent.
+   */
+  static async registerEquipment(
+    name: string,
+    category: string,
+    pricePerDay: number,
+    imageFile: File,
+    ownerId: string
+  ): Promise<any> {
+    // 1. Upload the image file first
+    const imageUrl = await this.uploadEquipmentImage(imageFile);
+
+    // 2. Insert the database record
+    const { data, error } = await supabase
+      .from("equipment")
+      .insert([{
+        name,
+        category,
+        price_per_day: pricePerDay,
+        image_url: imageUrl,
+        owner_id: ownerId,
+        status: "available"
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error registering equipment in database:", error);
+      throw error;
+    }
+
+    return data;
+  }
+
+  /**
+   * Fetch all equipment registered by a specific owner/lessor.
+   */
+  static async fetchMyEquipment(ownerId: string): Promise<any[]> {
+    const { data, error } = await supabase
+      .from("equipment")
+      .select("*")
+      .eq("owner_id", ownerId);
+
+    if (error) {
+      console.error("Error fetching owner's equipment:", error);
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Toggle/update equipment status between 'available' and 'maintenance'.
+   */
+  static async updateEquipmentStatus(equipId: string, status: "available" | "maintenance"): Promise<any> {
+    const { data, error } = await supabase
+      .from("equipment")
+      .update({ status })
+      .eq("id", equipId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating equipment status:", error);
+      throw error;
+    }
+
+    return data;
+  }
+
+  /**
+   * Delete an equipment listing.
+   */
+  static async deleteEquipment(equipId: string): Promise<void> {
+    const { error } = await supabase
+      .from("equipment")
+      .delete()
+      .eq("id", equipId);
+
+    if (error) {
+      console.error("Error deleting equipment:", error);
+      throw error;
+    }
+  }
 }

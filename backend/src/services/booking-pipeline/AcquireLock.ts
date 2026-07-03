@@ -11,7 +11,7 @@ export async function acquireLockStep(context: BookingPipelineContext): Promise<
       const resource = `equipment:${equipment_id}`;
       const success = await LockManager.acquireLock(resource, 8000, 3, 400);
       if (!success) {
-        throw new Error(`Lock Acquisition Conflict: Equipment slot is currently locked by another booking attempt.`);
+        throw new Error(`Lock Acquisition Conflict: Lịch đặt thiết bị hiện đang được xử lý bởi một yêu cầu khác. Vui lòng thử lại.`);
       }
       context.locksAcquired.push(resource);
     }
@@ -21,7 +21,7 @@ export async function acquireLockStep(context: BookingPipelineContext): Promise<
       const resource = `photographer:${photographer_id}`;
       const success = await LockManager.acquireLock(resource, 8000, 3, 400);
       if (!success) {
-        throw new Error(`Lock Acquisition Conflict: Photographer slot is currently locked by another booking attempt.`);
+        throw new Error(`Lock Acquisition Conflict: Lịch đặt thợ ảnh hiện đang được xử lý bởi một yêu cầu khác. Vui lòng thử lại.`);
       }
       context.locksAcquired.push(resource);
     }
