@@ -7,6 +7,16 @@ export async function sendEmail({ to, subject, html }: { to: string; subject: st
   const pass = process.env.SMTP_PASS;
   const sender = process.env.SMTP_SENDER || `"PhotoHub Studio" <${user}>`;
 
+  if (process.env.DISABLE_EMAIL === "true") {
+    console.log("ℹ️ Email notifications are disabled via DISABLE_EMAIL env variable. Skipping.");
+    return;
+  }
+
+  if (!to || to === "unknown@client.com" || to.endsWith("@client.com")) {
+    console.log(`ℹ️ Recipient is mock email (${to}). Skipping real email dispatch.`);
+    return;
+  }
+
   if (!user || !pass) {
     console.warn("⚠️ SMTP credentials not set. Skipping real email dispatch.");
     return;
