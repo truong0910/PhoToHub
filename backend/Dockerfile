@@ -1,5 +1,5 @@
-# Node.js 20 LTS Alpine base image
-FROM node:20-alpine AS builder
+# Node.js 22 LTS Alpine base image
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -13,7 +13,8 @@ RUN npm ci
 COPY src ./src
 
 # Production Stage
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
+
 
 WORKDIR /app
 

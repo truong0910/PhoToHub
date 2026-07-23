@@ -1,5 +1,11 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import express from "express";
+import WebSocket from "ws";
+
+// Polyfill globalThis.WebSocket for Node.js environments < 22 where native WebSocket is missing
+if (typeof globalThis.WebSocket === "undefined") {
+  (globalThis as any).WebSocket = WebSocket;
+}
 
 /**
  * Initializes a Supabase client scoped to the user request.
