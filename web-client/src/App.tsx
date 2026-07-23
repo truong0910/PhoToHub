@@ -15,10 +15,10 @@ import {
   Compass,
   CheckCircle,
   Loader,
-  Share2,
   LogOut,
   CircleDollarSign,
   Trash2
+
 } from "lucide-react";
 
 interface PaymentCountdownProps {
@@ -1424,13 +1424,14 @@ export default function App() {
                           <span className="font-bold text-photohub-orange font-serif">Các ngày đã bận:</span>
                           <div className="flex flex-wrap gap-1 mt-1 font-mono">
                             {hookData.unavailableDates.map((dateStr: string) => {
-                              const [year, month, day] = dateStr.split("-");
+                              const [, month, day] = dateStr.split("-");
                               return (
                                 <span key={dateStr} className="bg-white border border-photohub-teal/5 px-1.5 py-0.5 rounded text-[9.5px]">
                                   {day}/{month}
                                 </span>
                               );
                             })}
+
                           </div>
                         </div>
                       )}

@@ -8,6 +8,8 @@ import { getSupabaseClient, getServiceRoleClient } from "./shared/supabase-clien
 import { BookingRepository } from "./repositories/booking.repository.js";
 import { BookingService } from "./services/booking.service.js";
 import { BookingController } from "./controllers/booking.controller.js";
+import { AuthService } from "./services/auth.service.js";
+import { AuthController } from "./controllers/auth.controller.js";
 
 // Initialize async BullMQ background workers
 import "./workers/booking-timeout.worker.js";
@@ -16,9 +18,18 @@ import "./workers/email.worker.js";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Initialize Auth Controller instance
+const authService = new AuthService();
+const authController = new AuthController(authService);
+
 // 1. Enable Global CORS and JSON body parser
 app.use(cors());
 app.use(express.json());
+
+// OAuth Social Auth Routes (Google & Facebook)
+app.get("/api/v1/auth/google", authController.handleGoogleLogin);
+app.get("/api/v1/auth/facebook", authController.handleFacebookLogin);
+app.post("/api/v1/auth/social-sync", authController.handleSocialSync);
 
 // 2. Request lifecycle handler mapping
 const handleRequest = async (req: express.Request, res: express.Response) => {
@@ -61,6 +72,7 @@ app.post("/", handleRequest);
 app.post("/bookings", handleRequest);
 app.post("/functions/v1/photo-hub-api", handleRequest);
 app.patch("/bookings/:id/status", handleUpdateStatusRequest);
+
 // SePay Webhook Core Handler (Shared for standard & IPN routes)
 const handleSepayIpn = async (req: express.Request, res: express.Response) => {
   try {

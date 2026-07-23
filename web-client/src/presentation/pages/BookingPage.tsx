@@ -250,14 +250,15 @@ export function BookingPage({ hookData }: BookingPageProps) {
               <div className="text-zinc-500 text-[10px] space-y-1 border border-zinc-800 p-2.5 rounded-lg bg-zinc-950/50">
                 <span className="font-bold text-amber-500">Các ngày thợ/thiết bị này đã bận:</span>
                 <div className="flex flex-wrap gap-1 mt-1 font-mono">
-                  {unavailableDates.map((dateStr) => {
-                    const [year, month, day] = dateStr.split("-");
+                  {unavailableDates.map((dateStr: string) => {
+                    const [, month, day] = dateStr.split("-");
                     return (
                       <span key={dateStr} className="bg-zinc-850 px-1.5 py-0.5 rounded text-[9.5px]">
                         {day}/{month}
                       </span>
                     );
                   })}
+
                 </div>
               </div>
             )}
