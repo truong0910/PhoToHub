@@ -19,7 +19,8 @@ import {
   CircleDollarSign,
   Trash2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Search
 } from "lucide-react";
 
 interface PaymentCountdownProps {
@@ -84,16 +85,20 @@ export default function App() {
   // Sorting criteria: 'default' | 'name' | 'price_low' | 'price_high'
   const [sortBy, setSortBy] = useState<"default" | "name" | "price_low" | "price_high">("default");
 
+  // Live search query state
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Pagination states
   const [equipPage, setEquipPage] = useState(1);
   const [photoPage, setPhotoPage] = useState(1);
   const equipItemsPerPage = 9;
   const photoItemsPerPage = 6;
 
-  // Reset equipment page when category or sort changes
+  // Reset pagination pages when filters or search query change
   useEffect(() => {
     setEquipPage(1);
-  }, [equipCategory, sortBy]);
+    setPhotoPage(1);
+  }, [equipCategory, sortBy, searchQuery]);
 
   // Selected product checkout modal state
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -413,9 +418,18 @@ export default function App() {
     specs: ["Bảo hành trách nhiệm", "Đầy đủ pin & sạc đi kèm", "Hỗ trợ kỹ thuật 24/7"],
   }));
 
-  // 5. Apply filters, sort order, and pagination slicing
-  const filteredEquipment = equipmentProducts
-    .filter((e) => equipCategory === "all" || e.rawCategory === equipCategory);
+  // 5. Apply live search, filters, sort order, and pagination slicing
+  const queryLower = searchQuery.trim().toLowerCase();
+
+  const filteredEquipment = equipmentProducts.filter((e) => {
+    const matchCategory = equipCategory === "all" || e.rawCategory === equipCategory;
+    const matchQuery = !queryLower || (
+      e.name.toLowerCase().includes(queryLower) ||
+      e.category.toLowerCase().includes(queryLower) ||
+      e.specs.some((s) => s.toLowerCase().includes(queryLower))
+    );
+    return matchCategory && matchQuery;
+  });
 
   if (sortBy === "name") {
     filteredEquipment.sort((a, b) => a.name.localeCompare(b.name));
@@ -425,14 +439,23 @@ export default function App() {
     filteredEquipment.sort((a, b) => b.price - a.price);
   }
 
+  const filteredPhotographers = photographerProducts.filter((p) => {
+    if (!queryLower) return true;
+    return (
+      p.name.toLowerCase().includes(queryLower) ||
+      p.category.toLowerCase().includes(queryLower) ||
+      p.desc.toLowerCase().includes(queryLower)
+    );
+  });
+
   const totalEquipPages = Math.max(1, Math.ceil(filteredEquipment.length / equipItemsPerPage));
   const paginatedEquipment = filteredEquipment.slice(
     (equipPage - 1) * equipItemsPerPage,
     equipPage * equipItemsPerPage
   );
 
-  const totalPhotoPages = Math.max(1, Math.ceil(photographerProducts.length / photoItemsPerPage));
-  const paginatedPhotographers = photographerProducts.slice(
+  const totalPhotoPages = Math.max(1, Math.ceil(filteredPhotographers.length / photoItemsPerPage));
+  const paginatedPhotographers = filteredPhotographers.slice(
     (photoPage - 1) * photoItemsPerPage,
     photoPage * photoItemsPerPage
   );
@@ -458,6 +481,27 @@ export default function App() {
               <span>PhotoHub</span>
             </h1>
             <span className="text-[10px] uppercase tracking-widest text-photohub-muted font-bold font-mono font-serif">Studio & Rental Store</span>
+          </div>
+
+          {/* Quick Search Bar in Header */}
+          <div className="relative hidden md:flex items-center w-64 lg:w-80">
+            <Search className="w-4 h-4 text-photohub-muted absolute left-3.5 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Tìm Sony, Canon, Aputure, Thợ chụp..."
+              className="w-full bg-white/80 border border-photohub-teal/15 rounded-full pl-9 pr-8 py-2 text-xs text-photohub-teal focus:bg-white focus:border-photohub-orange focus:outline-none shadow-sm transition-all placeholder:text-photohub-muted/70"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 p-1 text-photohub-muted hover:text-photohub-teal rounded-full cursor-pointer"
+                title="Xóa tìm kiếm"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -605,9 +649,39 @@ export default function App() {
             </div>
 
             <div className="bg-white border border-photohub-teal/5 rounded-2xl p-6 space-y-6 shadow-sm">
+              {/* Mobile Search Bar */}
+              <div className="relative flex md:hidden items-center w-full">
+                <Search className="w-4 h-4 text-photohub-muted absolute left-3.5 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Tìm Sony, Canon, Aputure, Thợ chụp..."
+                  className="w-full bg-photohub-sand/50 border border-photohub-teal/15 rounded-xl pl-9 pr-8 py-2.5 text-xs text-photohub-teal focus:border-photohub-orange focus:outline-none shadow-sm"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 p-1 text-photohub-muted hover:text-photohub-teal cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
               <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-extrabold text-photohub-teal uppercase tracking-widest font-mono">DANH MỤC</span>
+                <div className="flex justify-between items-center flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold text-photohub-teal uppercase tracking-widest font-mono">DANH MỤC</span>
+                    {searchQuery && (
+                      <span className="text-xs bg-photohub-orange/10 text-photohub-orange font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        🔍 "{searchQuery}"
+                        <button onClick={() => setSearchQuery("")} className="hover:text-photohub-teal">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-photohub-muted font-bold font-mono">Hiển thị {filteredEquipment.length} sản phẩm</span>
                 </div>
 
@@ -811,7 +885,17 @@ export default function App() {
           <div className="space-y-8 animate-fadeIn">
             <div className="rounded-2xl bg-photohub-teal text-photohub-sand p-8 md:p-10 shadow border border-photohub-teal">
               <div className="space-y-3">
-                <span className="text-[10px] uppercase font-mono tracking-widest text-photohub-orange font-bold">Portfolios Matching</span>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-[10px] uppercase font-mono tracking-widest text-photohub-orange font-bold">Portfolios Matching</span>
+                  {searchQuery && (
+                    <span className="text-xs bg-photohub-orange text-white font-semibold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+                      🔍 Tìm kiếm: "{searchQuery}"
+                      <button onClick={() => setSearchQuery("")} className="hover:opacity-80">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
+                  )}
+                </div>
                 <h2 className="text-3xl md:text-4xl font-extrabold font-serif">Kết Nối Nhiếp Ảnh Gia Chuyên Nghiệp</h2>
                 <p className="text-xs text-photohub-muted max-w-xl leading-relaxed">
                   Lựa chọn nhân sự chụp ảnh phù hợp với phong cách chụp ảnh cưới, sự kiện doanh nghiệp, chụp ảnh chân dung ngoại cảnh hoặc lookbook thời trang.
@@ -819,10 +903,16 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {paginatedPhotographers.map((p) => (
-                <div
-                  key={p.id}
+            {filteredPhotographers.length === 0 ? (
+              <div className="text-center py-20 text-photohub-muted border border-dashed border-photohub-teal/10 rounded-2xl bg-white">
+                Không tìm thấy nhiếp ảnh gia nào phù hợp với từ khóa "{searchQuery}".
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {paginatedPhotographers.map((p) => (
+                    <div
+                      key={p.id}
                   className="bg-white border border-photohub-teal/10 rounded-2xl p-6 flex flex-col sm:flex-row gap-6 shadow-sm hover:shadow-md transition-shadow"
                 >
                   <img
@@ -883,7 +973,7 @@ export default function App() {
             {totalPhotoPages > 1 && (
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-photohub-teal/10 rounded-2xl p-4 shadow-sm mt-6">
                 <div className="text-xs text-photohub-muted font-semibold">
-                  Hiển thị <span className="font-bold text-photohub-teal">{(photoPage - 1) * photoItemsPerPage + 1} - {Math.min(photoPage * photoItemsPerPage, photographerProducts.length)}</span> trên tổng số <span className="font-bold text-photohub-teal">{photographerProducts.length}</span> thợ chụp
+                  Hiển thị <span className="font-bold text-photohub-teal">{(photoPage - 1) * photoItemsPerPage + 1} - {Math.min(photoPage * photoItemsPerPage, filteredPhotographers.length)}</span> trên tổng số <span className="font-bold text-photohub-teal">{filteredPhotographers.length}</span> thợ chụp
                 </div>
 
                 <div className="flex items-center gap-1 text-xs">
@@ -918,6 +1008,8 @@ export default function App() {
                   </button>
                 </div>
               </div>
+            )}
+              </>
             )}
           </div>
         )}
