@@ -86,6 +86,20 @@ export default function App() {
   // Selected product checkout modal state
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
+  // Auth modal overlay state for guest users
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalReason, setAuthModalReason] = useState("");
+
+  const requireAuth = (reason: string, action?: () => void) => {
+    if (!hookData.clientId) {
+      setAuthModalReason(reason);
+      setShowAuthModal(true);
+      return false;
+    }
+    if (action) action();
+    return true;
+  };
+
   // SePay newly created booking context (single or batch)
   const [createdBooking, setCreatedBooking] = useState<any>(null);
 
@@ -121,6 +135,15 @@ export default function App() {
 
   // Sync dates from modal selection to domain hook
   const handleProductSelect = (product: any) => {
+    if (!hookData.clientId) {
+      requireAuth(
+        product.type === "photographer"
+          ? "Vui lòng đăng nhập để đặt lịch book thợ chụp."
+          : "Vui lòng đăng nhập để đặt lịch thuê thiết bị."
+      );
+      return;
+    }
+
     setSelectedProduct(product);
     setCreatedBooking(null);
     setCheckoutPaymentMethod("vietqr");
@@ -322,7 +345,7 @@ export default function App() {
   };
 
   // 1. Loading screen during session synchronization
-  if (hookData.loading && !hookData.clientId) {
+  if (hookData.loading) {
     return (
       <div className="min-h-screen bg-photohub-sand flex items-center justify-center font-sans">
         <div className="text-photohub-teal text-sm animate-pulse flex flex-col items-center gap-3">
@@ -333,17 +356,12 @@ export default function App() {
     );
   }
 
-  // 2. Redirect to Login/Registration Page if there is no active session
-  if (!hookData.clientId) {
-    return <AuthPage />;
-  }
-
-  const clientName = hookData.clientProfile?.full_name || "Thành Viên";
+  const clientName = hookData.clientProfile?.full_name || (hookData.clientId ? "Thành Viên" : "Khách Vãng Lai");
   const clientRole = hookData.clientProfile?.role || "client";
   const clientPhone = hookData.clientProfile?.phone || "Chưa cập nhật SĐT";
 
   // If photographer, render photographer dashboard directly
-  if (clientRole === "photographer") {
+  if (hookData.clientId && clientRole === "photographer") {
     return <PhotographerDashboard hookData={hookData} currentUserId={hookData.clientId} clientName={clientName} />;
   }
 
@@ -430,7 +448,7 @@ export default function App() {
             THUÊ NGƯỜI CHỤP
           </button>
           <button
-            onClick={() => setActiveTab("orders")}
+            onClick={() => requireAuth("Vui lòng đăng nhập để xem lịch sử đơn hàng của bạn.", () => setActiveTab("orders"))}
             className={`px-4 py-2.5 rounded-lg transition-all cursor-pointer relative ${activeTab === "orders"
                 ? "bg-photohub-teal text-white shadow"
                 : "text-photohub-teal/75 hover:bg-photohub-teal/5"
@@ -458,7 +476,7 @@ export default function App() {
             )}
           </button>
           <button
-            onClick={() => setActiveTab("profile")}
+            onClick={() => requireAuth("Vui lòng đăng nhập để xem hồ sơ của bạn.", () => setActiveTab("profile"))}
             className={`px-4 py-2.5 rounded-lg transition-all cursor-pointer ${activeTab === "profile"
                 ? "bg-photohub-teal text-white shadow"
                 : "text-photohub-teal/75 hover:bg-photohub-teal/5"
@@ -468,27 +486,39 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Profile User Panel & LogOut */}
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:block text-right">
-            <div className="text-xs font-bold text-photohub-teal">{clientName}</div>
-            <div className="text-[9px] uppercase tracking-wider text-photohub-orange font-bold font-mono">Hạng {clientRole === "admin" ? "Admin" : "Thành Viên"}</div>
-          </div>
-          <button
-            onClick={() => setActiveTab("profile")}
-            className="h-10 w-10 rounded-full bg-photohub-teal text-photohub-sand font-bold text-sm border border-photohub-teal/10 flex items-center justify-center cursor-pointer transition-transform active:scale-95"
-          >
-            {clientName.substring(0, 2).toUpperCase()}
-          </button>
+        {/* Profile User Panel or Sign In Button */}
+        {hookData.clientId ? (
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:block text-right">
+              <div className="text-xs font-bold text-photohub-teal">{clientName}</div>
+              <div className="text-[9px] uppercase tracking-wider text-photohub-orange font-bold font-mono">Hạng {clientRole === "admin" ? "Admin" : "Thành Viên"}</div>
+            </div>
+            <button
+              onClick={() => setActiveTab("profile")}
+              className="h-10 w-10 rounded-full bg-photohub-teal text-photohub-sand font-bold text-sm border border-photohub-teal/10 flex items-center justify-center cursor-pointer transition-transform active:scale-95"
+            >
+              {clientName.substring(0, 2).toUpperCase()}
+            </button>
 
+            <button
+              onClick={handleLogout}
+              className="p-2 text-photohub-muted hover:text-photohub-orange transition-colors cursor-pointer"
+              title="Đăng xuất tài khoản"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        ) : (
           <button
-            onClick={handleLogout}
-            className="p-2 text-photohub-muted hover:text-photohub-orange transition-colors cursor-pointer"
-            title="Đăng xuất tài khoản"
+            onClick={() => {
+              setAuthModalReason("");
+              setShowAuthModal(true);
+            }}
+            className="bg-photohub-teal hover:bg-photohub-teal/90 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all cursor-pointer shadow-sm active:scale-95"
           >
-            <LogOut className="w-5 h-5" />
+            Đăng Nhập / Đăng Ký
           </button>
-        </div>
+        )}
       </header>
 
       {/* Mobile nav indicator bar */}
@@ -506,7 +536,7 @@ export default function App() {
           Người Chụp
         </button>
         <button
-          onClick={() => setActiveTab("orders")}
+          onClick={() => requireAuth("Vui lòng đăng nhập để xem đơn hàng.", () => setActiveTab("orders"))}
           className={`flex-1 py-2 text-center rounded relative ${activeTab === "orders" ? "bg-photohub-teal text-white" : "text-photohub-teal/70"}`}
         >
           Đơn ({hookData.myBookings.length})
@@ -518,7 +548,7 @@ export default function App() {
           Giỏ ({hookData.cartItems.length})
         </button>
         <button
-          onClick={() => setActiveTab("profile")}
+          onClick={() => requireAuth("Vui lòng đăng nhập để xem hồ sơ.", () => setActiveTab("profile"))}
           className={`flex-1 py-2 text-center rounded ${activeTab === "profile" ? "bg-photohub-teal text-white" : "text-photohub-teal/70"}`}
         >
           Hồ Sơ
@@ -1528,6 +1558,14 @@ export default function App() {
         <Compass className="w-3.5 h-3.5 text-photohub-orange" />
         <span>PhotoHub E-Commerce Ecosystem &copy; 2026. Hỗ trợ hệ thống đặt lịch tự động.</span>
       </footer>
+
+      {/* Auth Modal for guest users */}
+      {showAuthModal && (
+        <AuthPage
+          onClose={() => setShowAuthModal(false)}
+          message={authModalReason}
+        />
+      )}
     </div>
   );
 }

@@ -1,8 +1,13 @@
 import { useState } from "react";
 import { supabase } from "../../config/supabase.js";
-import { Sparkles, Loader, CheckCircle, ArrowLeft } from "lucide-react";
+import { Sparkles, Loader, CheckCircle, ArrowLeft, X } from "lucide-react";
 
-export function AuthPage() {
+export interface AuthPageProps {
+  onClose?: () => void;
+  message?: string;
+}
+
+export function AuthPage({ onClose, message }: AuthPageProps = {}) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -47,6 +52,7 @@ export function AuthPage() {
         }
 
         setSuccessMsg("Xác thực mã OTP thành công! Đang đăng nhập vào hệ thống...");
+        if (onClose) setTimeout(() => onClose(), 600);
         return;
       }
 
@@ -89,6 +95,7 @@ export function AuthPage() {
           });
 
           if (error) throw error;
+          if (onClose) onClose();
         }
       }
     } catch (err: any) {
@@ -139,26 +146,43 @@ export function AuthPage() {
 
 
 
-  return (
-    <div className="min-h-screen bg-photohub-sand flex flex-col justify-center items-center p-4">
-      <div className="bg-white border border-photohub-teal/10 rounded-2xl w-full max-w-md p-8 shadow-xl space-y-6 animate-scaleUp">
-        {/* Brand Logo Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-photohub-teal text-photohub-sand shadow-md">
-            <Sparkles className="w-6 h-6 text-photohub-orange fill-photohub-orange" />
-          </div>
-          <h2 className="text-3xl font-extrabold text-photohub-teal font-serif">PhotoHub</h2>
-          <p className="text-xs text-photohub-muted font-semibold uppercase tracking-wider font-mono">
-            {otpSent 
-              ? "Xác thực mã OTP" 
-              : isSignUp 
-                ? "Tạo tài khoản mới" 
-                : useOtpLogin 
-                  ? "Đăng nhập bằng mã OTP" 
-                  : "Đăng nhập hệ sinh thái Studio"
-            }
-          </p>
+  const cardMarkup = (
+    <div className="bg-white border border-photohub-teal/10 rounded-2xl w-full max-w-md p-8 shadow-xl space-y-6 animate-scaleUp relative">
+      {onClose && (
+        <button
+          onClick={onClose}
+          type="button"
+          className="absolute top-4 right-4 p-2 text-photohub-muted hover:text-photohub-teal transition-colors rounded-full hover:bg-photohub-sand cursor-pointer"
+          title="Đóng / Quay lại"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      )}
+
+      {/* Brand Logo Header */}
+      <div className="text-center space-y-2">
+        <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-photohub-teal text-photohub-sand shadow-md">
+          <Sparkles className="w-6 h-6 text-photohub-orange fill-photohub-orange" />
         </div>
+        <h2 className="text-3xl font-extrabold text-photohub-teal font-serif">PhotoHub</h2>
+        <p className="text-xs text-photohub-muted font-semibold uppercase tracking-wider font-mono">
+          {otpSent 
+            ? "Xác thực mã OTP" 
+            : isSignUp 
+              ? "Tạo tài khoản mới" 
+              : useOtpLogin 
+                ? "Đăng nhập bằng mã OTP" 
+                : "Đăng nhập hệ sinh thái Studio"
+          }
+        </p>
+      </div>
+
+      {message && (
+        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-800 text-xs p-3.5 rounded-xl flex items-center gap-2.5 font-medium leading-relaxed">
+          <span className="text-base">🔒</span>
+          <span>{message}</span>
+        </div>
+      )}
 
         {/* Tab Toggle - Only visible when not verifying OTP */}
         {!otpSent && (
@@ -414,6 +438,19 @@ export function AuthPage() {
           </div>
         )}
       </div>
+    );
+
+  if (onClose) {
+    return (
+      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+        {cardMarkup}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-photohub-sand flex flex-col justify-center items-center p-4">
+      {cardMarkup}
     </div>
   );
 }

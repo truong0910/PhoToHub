@@ -45,8 +45,6 @@ export function useUserBooking() {
       if (data.session) {
         setClientId(data.session.user.id);
         fetchClientProfile(data.session.user.id);
-      } else {
-        setLoading(false);
       }
     });
 
@@ -59,7 +57,6 @@ export function useUserBooking() {
         setClientProfile(null);
         setMyBookings([]);
         setMyEquipment([]);
-        setLoading(false);
       }
     });
 
@@ -84,31 +81,48 @@ export function useUserBooking() {
     }
   };
 
-  // 2. Fetch photographers, equipment, and user bookings once clientId is established
+  // 2. Fetch public catalogs (photographers, equipment) on initial mount
   useEffect(() => {
-    if (!clientId) return;
-
-    async function loadData() {
+    async function loadPublicCatalog() {
       try {
         setLoading(true);
-        const [photoData, equipData, bookingsData, myEquipData] = await Promise.all([
+        const [photoData, equipData] = await Promise.all([
           UserBookingSource.fetchPhotographers(),
           UserBookingSource.fetchAvailableEquipment(),
-          UserBookingSource.fetchUserBookings(clientId!),
-          UserBookingSource.fetchMyEquipment(clientId!),
         ]);
         setPhotographers(photoData);
         setEquipmentList(equipData);
-        setMyBookings(bookingsData);
-        setMyEquipment(myEquipData);
       } catch (err: any) {
-        console.error("Hook initial load failure:", err);
+        console.error("Hook initial catalog load failure:", err);
         setErrorMsg(err.message || "Failed to load database dependencies.");
       } finally {
         setLoading(false);
       }
     }
-    loadData();
+    loadPublicCatalog();
+  }, []);
+
+  // 3. Fetch user-specific data (bookings, my equipment) when clientId changes
+  useEffect(() => {
+    if (!clientId) {
+      setMyBookings([]);
+      setMyEquipment([]);
+      return;
+    }
+
+    async function loadUserData() {
+      try {
+        const [bookingsData, myEquipData] = await Promise.all([
+          UserBookingSource.fetchUserBookings(clientId!),
+          UserBookingSource.fetchMyEquipment(clientId!),
+        ]);
+        setMyBookings(bookingsData);
+        setMyEquipment(myEquipData);
+      } catch (err: any) {
+        console.error("Hook user data load failure:", err);
+      }
+    }
+    loadUserData();
   }, [clientId]);
 
   // 3. Reactive calculation of days and pricing when inputs change
