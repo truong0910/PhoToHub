@@ -81,10 +81,10 @@ export async function handleAIChat(req: Request, res: Response): Promise<void> {
       }
     }
 
-    // 3. 100% LLM Call: Google Gemini 1.5 Flash API
+    // 3. 100% LLM Call: Google Gemini 2.5 Flash API
     if (geminiApiKey && geminiApiKey.trim().length > 10) {
       try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey.trim()}`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey.trim()}`;
 
         const systemInstructionText = `Bạn là Trợ lý AI Chuyên Nghiệp của hệ sinh thái thương mại điện tử PhoTohub (Cho thuê máy ảnh & Đặt lịch thợ chụp).
 Nhiệm vụ: Dùng trí tuệ nhân tạo để phân tích BẤT KỲ câu hỏi nào của người dùng (từ đi chơi, du lịch, chụp cưới, phượt, chụp đêm, hỏi giá cả, tổng số sản phẩm, so sánh máy ảnh...).
