@@ -18,13 +18,13 @@ export async function handleAIChat(req: Request, res: Response): Promise<void> {
       .from("equipment")
       .select("id, name, category, price_per_day, image_url")
       .eq("status", "available")
-      .limit(30);
+      .limit(60);
 
     const { data: photographers } = await supabase
       .from("profiles")
       .select("id, full_name, role, experience_years, base_price, bio, avatar_url")
       .eq("role", "photographer")
-      .limit(15);
+      .limit(20);
 
     const context = {
       equipment: equipment || [],
@@ -33,6 +33,7 @@ export async function handleAIChat(req: Request, res: Response): Promise<void> {
 
     const aiEndpoint = process.env.AI_ENDPOINT_URL;
     const aiApiKey = process.env.AI_API_KEY || process.env.NGROK_AUTHTOKEN;
+    const geminiApiKey = process.env.GEMINI_API_KEY;
 
     // 2. Attempt calling ngrok AI Service if configured
     if (aiEndpoint) {
@@ -74,84 +75,171 @@ export async function handleAIChat(req: Request, res: Response): Promise<void> {
           return;
         }
       } catch (err: any) {
-        console.warn("Notice: ngrok AI endpoint fetch timed out or offline, switching to PhoTohub AI fallback engine.", err.message);
+        console.warn("Notice: ngrok AI endpoint offline, trying Google Gemini LLM API...", err.message);
       }
     }
 
-    // 3. Fallback PhoTohub AI Recommendation Engine
+    // 3. Attempt calling Google Gemini LLM API directly if GEMINI_API_KEY is configured
+    if (geminiApiKey && geminiApiKey.trim().length > 10) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey.trim()}`;
+
+        const systemInstructionText = `Bạn là Trợ lý AI Chuyên Nghiệp của hệ thống thương mại điện tử PhoTohub (Studio & Thuê thiết bị máy ảnh/Thợ chụp).
+Nhiệm vụ của bạn: Trả lời tự nhiên, thân thiện bằng Tiếng Việt cho BẤT KỲ nhu cầu nào của người dùng (đi chơi, đi phượt, du lịch, chụp cưới, quay video 4k, kinh phí thấp/cao, chụp đêm, chụp em bé...).
+Hãy tư vấn chân thực và chọn ra tối đa 2 thiết bị và 1 thợ chụp phù hợp nhất từ danh mục kho hàng Supabase sau:
+
+DANH MỤC THIẾT BỊ HIỆN CÓ:
+${JSON.stringify((equipment || []).map(e => ({ id: e.id, name: e.name, category: e.category, price: e.price_per_day })), null, 1)}
+
+DANH SÁCH THỢ CHỤP HIỆN CÓ:
+${JSON.stringify((photographers || []).map(p => ({ id: p.id, name: p.full_name, exp: p.experience_years, price: p.base_price, bio: p.bio })), null, 1)}
+
+BẠN BẮT BUỘC PHẢI TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON SAU (không kèm ký tự thừa):
+{
+  "reply": "Lời tư vấn tự nhiên thân thiện bằng Tiếng Việt...",
+  "recommended_equipment_ids": ["id_thiet_bi_1", "id_thiet_bi_2"],
+  "recommended_photographer_ids": ["id_tho_chup_1"]
+}`;
+
+        const response = await fetch(geminiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [{ text: `${systemInstructionText}\n\nCâu hỏi của khách hàng: "${userPrompt}"` }],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.7,
+              responseMimeType: "application/json",
+            },
+          }),
+        });
+
+        if (response.ok) {
+          const geminiData = await response.json();
+          const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+          if (rawText) {
+            const parsed = JSON.parse(rawText);
+            const recommendations: any[] = [];
+
+            if (Array.isArray(parsed.recommended_equipment_ids)) {
+              parsed.recommended_equipment_ids.forEach((id: string) => {
+                const found = (equipment || []).find((e) => e.id === id);
+                if (found) recommendations.push({ type: "equipment", item: found });
+              });
+            }
+
+            if (Array.isArray(parsed.recommended_photographer_ids)) {
+              parsed.recommended_photographer_ids.forEach((id: string) => {
+                const found = (photographers || []).find((p) => p.id === id);
+                if (found) recommendations.push({ type: "photographer", item: found });
+              });
+            }
+
+            res.json({
+              success: true,
+              reply: parsed.reply,
+              recommendations,
+              source: "google-gemini-llm",
+            });
+            return;
+          }
+        }
+      } catch (geminiErr: any) {
+        console.warn("Notice: Gemini API call error, switching to PhoTohub Semantic Engine.", geminiErr.message);
+      }
+    }
+
+    // 4. Fallback PhoTohub Semantic Engine
     const lowerPrompt = userPrompt.toLowerCase();
     let replyText = "";
     const recommendations: any[] = [];
 
-    if (lowerPrompt.includes("cưới") || lowerPrompt.includes("pre-wedding") || lowerPrompt.includes("đám cưới")) {
-      const matchPhotographer = (photographers || []).find((p) => p.bio?.toLowerCase().includes("cưới") || p.bio?.toLowerCase().includes("pre-wedding")) || photographers?.[0];
-      const matchCamera = (equipment || []).find((e) => e.name.includes("Sony A7 IV") || e.name.includes("Canon EOS R5") || e.name.includes("Nikon Z8"));
+    const findPhoto = (keywords: string[]) => (photographers || []).filter(p => keywords.some(k => p.bio?.toLowerCase().includes(k) || p.full_name?.toLowerCase().includes(k)));
 
-      replyText = `Chào bạn! Để chụp ảnh cưới / Pre-wedding chất lượng điện ảnh màu sắc sang trọng, PhoTohub xin tư vấn cho bạn bộ combo tối ưu nhất:
+    // Travel / Going out / Outdoor / Compact / Casual
+    if (lowerPrompt.includes("đi chơi") || lowerPrompt.includes("du lịch") || lowerPrompt.includes("dã ngoại") || lowerPrompt.includes("gọn nhẹ") || lowerPrompt.includes("phượt") || lowerPrompt.includes("ngoại cảnh") || lowerPrompt.includes("đà lạt") || lowerPrompt.includes("mang đi") || lowerPrompt.includes("chơi")) {
+      const compactCam = (equipment || []).find(e => e.name.includes("GoPro") || e.name.includes("Insta360") || e.name.includes("X-T5") || e.name.includes("A6700") || e.name.includes("Leica Q3")) || equipment?.[0];
+      const travelPhoto = findPhoto(["du lịch", "dã ngoại", "outdoor", "street"])[0] || photographers?.[0];
 
-📸 **Máy ảnh gợi ý**: ${matchCamera ? matchCamera.name : "Sony A7 IV Full-Frame"} (Cho chi tiết cực nét, dynamic range rộng xử lý váy cưới màu trắng mượt mà).
-👨‍🎨 **Thợ chụp gợi ý**: Nhiếp ảnh gia ${matchPhotographer ? matchPhotographer.full_name : "Nguyễn Anh Tuấn"} (${matchPhotographer ? matchPhotographer.experience_years : 8} năm kinh nghiệm chuyên ảnh cưới cinematic).
+      replyText = `Chào bạn! Với nhu cầu **đi chơi / du lịch**, bạn nên ưu tiên thiết bị nhỏ gọn, chống rung tốt và màu sắc tươi sáng để thoải mái di chuyển:
 
-Bạn có thể ấn nút xem chi tiết ở bên dưới để tiến hành đặt lịch thuê ngay!`;
+📸 **Camera nhỏ gọn khuyên dùng**: ${compactCam ? compactCam.name : "GoPro HERO12 / Fujifilm X-T5"} (Màu sắc rực rỡ, gọn nhẹ).
+👨‍🎨 **Thợ chụp gợi ý**: ${travelPhoto ? `Nhiếp ảnh gia ${travelPhoto.full_name} (${travelPhoto.experience_years} năm kinh nghiệm outdoor & du lịch)` : "Nhiếp ảnh gia chuyên outdoor"}.`;
+
+      if (compactCam) recommendations.push({ type: "equipment", item: compactCam });
+      if (travelPhoto) recommendations.push({ type: "photographer", item: travelPhoto });
+    }
+    // Wedding / Pre-wedding
+    else if (lowerPrompt.includes("cưới") || lowerPrompt.includes("pre-wedding") || lowerPrompt.includes("đám cưới")) {
+      const matchPhotographer = findPhoto(["cưới", "pre-wedding"])[0] || photographers?.[0];
+      const matchCamera = (equipment || []).find((e) => e.name.includes("Sony A7 IV") || e.name.includes("Canon EOS R5") || e.name.includes("Nikon Z8")) || equipment?.[0];
+
+      replyText = `Chào bạn! Để chụp ảnh cưới / Pre-wedding chất lượng điện ảnh màu sắc sang trọng:
+
+📸 **Máy ảnh gợi ý**: ${matchCamera ? matchCamera.name : "Sony A7 IV Full-Frame"}
+👨‍🎨 **Thợ chụp gợi ý**: Nhiếp ảnh gia ${matchPhotographer ? matchPhotographer.full_name : "Nguyễn Anh Tuấn"} (${matchPhotographer ? matchPhotographer.experience_years : 8} năm kinh nghiệm chuyên ảnh cưới cinematic).`;
 
       if (matchCamera) recommendations.push({ type: "equipment", item: matchCamera });
       if (matchPhotographer) recommendations.push({ type: "photographer", item: matchPhotographer });
-    } else if (lowerPrompt.includes("quay phim") || lowerPrompt.includes("video") || lowerPrompt.includes("reels") || lowerPrompt.includes("tiktok") || lowerPrompt.includes("4k")) {
+    }
+    // Video / 4K / Vlog
+    else if (lowerPrompt.includes("quay phim") || lowerPrompt.includes("video") || lowerPrompt.includes("reels") || lowerPrompt.includes("tiktok") || lowerPrompt.includes("4k")) {
       const matchFX3 = (equipment || []).find((e) => e.name.includes("FX3") || e.name.includes("A7S III") || e.name.includes("C70")) || equipment?.[1];
       const matchMic = (equipment || []).find((e) => e.name.includes("Rode") || e.name.includes("Wireless") || e.name.includes("Gimbal")) || equipment?.[2];
 
-      replyText = `Chào bạn! Đối với nhu cầu quay phim video 4K sắc nét và chống rung chuyên nghiệp, PhoTohub đề xuất combo sản phẩm hot nhất hiện nay:
+      replyText = `Chào bạn! Đối với nhu cầu quay phim video 4K sắc nét và chống rung chuyên nghiệp:
 
-🎥 **Body Cinema**: ${matchFX3 ? matchFX3.name : "Sony FX3 Cinema Camera"} (Hỗ trợ 4K 120fps quay slow-motion không giới hạn).
-🎙️ **Thiết bị phụ trợ**: ${matchMic ? matchMic.name : "Bộ Mic Rode Wireless PRO"} & Gimbal chống rung DJI RS 3.
-
-Combo này sẵn sàng đồng hành cùng bạn trong mọi góc quay sáng tạo!`;
+🎥 **Body Cinema**: ${matchFX3 ? matchFX3.name : "Sony FX3 Cinema Camera"} (Hỗ trợ 4K 120fps quay slow-motion).
+🎙️ **Phụ kiện**: ${matchMic ? matchMic.name : "Bộ Mic Rode Wireless PRO"} & Gimbal RS 3.`;
 
       if (matchFX3) recommendations.push({ type: "equipment", item: matchFX3 });
       if (matchMic) recommendations.push({ type: "equipment", item: matchMic });
-    } else if (lowerPrompt.includes("lookbook") || lowerPrompt.includes("thời trang") || lowerPrompt.includes("quần áo") || lowerPrompt.includes("mẫu")) {
-      const matchLookbookPhotographer = (photographers || []).find((p) => p.bio?.toLowerCase().includes("lookbook") || p.bio?.toLowerCase().includes("thời trang")) || photographers?.[1];
-      const matchLens = (equipment || []).find((e) => e.name.includes("85mm") || e.name.includes("50mm") || e.name.includes("24-70")) || equipment?.[3];
+    }
+    // Budget queries
+    else if (lowerPrompt.includes("100k") || lowerPrompt.includes("200k") || lowerPrompt.includes("500k") || lowerPrompt.includes("kinh phí") || lowerPrompt.includes("ngân sách") || lowerPrompt.includes("rẻ")) {
+      const sortedEquipment = [...(equipment || [])].sort((a, b) => Number(a.price_per_day) - Number(b.price_per_day));
+      let targetBudget = 500000;
 
-      replyText = `Chào bạn! Chụp ảnh Lookbook thời trang cần độ nổi khối và màu sắc chuẩn chỉnh cho trang phục. PhoTohub tư vấn cho bạn:
+      if (lowerPrompt.includes("100k") || lowerPrompt.includes("100.000")) targetBudget = 100000;
+      else if (lowerPrompt.includes("200k")) targetBudget = 200000;
 
-👗 **Nhiếp ảnh gia chuyên thời trang**: ${matchLookbookPhotographer ? matchLookbookPhotographer.full_name : "Trần Bảo Nam"} (Chuyên làm việc với các thương hiệu thời trang cao cấp).
-🔋 **Ống kính khuyên dùng**: ${matchLens ? matchLens.name : "Sony FE 85mm f/1.4 GM"} (Xóa phông mượt mà, làm nổi bật phom dáng quần áo).`;
+      const matchingEquip = sortedEquipment.filter((e) => Number(e.price_per_day) <= targetBudget);
 
-      if (matchLookbookPhotographer) recommendations.push({ type: "photographer", item: matchLookbookPhotographer });
-      if (matchLens) recommendations.push({ type: "equipment", item: matchLens });
-    } else if (lowerPrompt.includes("đèn") || lowerPrompt.includes("studio") || lowerPrompt.includes("ánh sáng") || lowerPrompt.includes("livestream")) {
-      const matchLight = (equipment || []).find((e) => e.category === "lighting" || e.name.includes("Aputure") || e.name.includes("Godox") || e.name.includes("Nanlite")) || equipment?.[4];
+      if (matchingEquip.length > 0) {
+        replyText = `Chào bạn! Với ngân sách tầm ${targetBudget.toLocaleString("vi-VN")} đ/ngày, PhoTohub xin gợi ý các thiết bị phù hợp nhất:`;
+        matchingEquip.slice(0, 3).forEach((e) => recommendations.push({ type: "equipment", item: e }));
+      } else {
+        const cheapest = sortedEquipment.slice(0, 3);
+        replyText = `Chào bạn! Với kinh phí ${targetBudget.toLocaleString("vi-VN")} đ/ngày, thiết bị máy ảnh & phụ kiện studio tiết kiệm nhất tại PhoTohub khởi điểm từ ${Number(cheapest[0]?.price_per_day || 90000).toLocaleString("vi-VN")} đ/ngày:`;
+        cheapest.forEach((e) => recommendations.push({ type: "equipment", item: e }));
+      }
+    }
+    // Generic fallback for any other prompt
+    else {
+      const topEquip = equipment?.[0];
+      const topPhoto = photographers?.[0];
 
-      replyText = `Chào bạn! Ánh sáng là linh hồn của ảnh Studio & Video. PhoTohub gợi ý thiết bị ánh sáng phù hợp cho bạn:
+      replyText = `Cảm ơn bạn đã liên hệ PhoTohub AI Assistant về nhu cầu: "${userPrompt}"! 🤖
 
-💡 **Thiết bị ánh sáng**: ${matchLight ? matchLight.name : "Aputure LS 600d Pro / Godox AD600Pro"}
-Chỉ số hoàn màu CRI > 96+, công suất cực mạnh giúp da mẫu sáng mịn tự nhiên và màu sắc sản phẩm lên chuẩn nhất!`;
+Để phục vụ tốt nhất cho nhu cầu của bạn, PhoTohub đề xuất bộ thiết bị và thợ chụp nổi bật sẵn sàng cho thuê:
 
-      if (matchLight) recommendations.push({ type: "equipment", item: matchLight });
-    } else {
-      const randomEquip = equipment?.[0];
-      const randomPhoto = photographers?.[0];
+📸 **Máy ảnh nổi bật**: ${topEquip ? topEquip.name : "Sony A7 IV Full-Frame"}
+👨‍🎨 **Thợ chụp chuyên nghiệp**: ${topPhoto ? `Nhiếp ảnh gia ${topPhoto.full_name}` : "Nhiếp ảnh gia PhoTohub"}`;
 
-      replyText = `Cảm ơn bạn đã liên hệ PhoTohub AI Assistant! 🤖
-
-PhoTohub hiện đang quản lý kho 100 thiết bị máy ảnh, lens chuyên dụng, đèn studio cùng 20 thợ chụp chuyên nghiệp. 
-Bạn có thể hỏi tôi chi tiết theo nhu cầu:
-- *"Nên thuê máy ảnh nào chụp sự kiện?"*
-- *"Tư vấn thợ chụp ảnh kỷ yếu / tốt nghiệp"*
-- *"Gợi ý ống kính xóa phông chân dung"*
-
-Dưới đây là thiết bị & thợ chụp nổi bật đang sẵn sàng cho thuê:`;
-
-      if (randomEquip) recommendations.push({ type: "equipment", item: randomEquip });
-      if (randomPhoto) recommendations.push({ type: "photographer", item: randomPhoto });
+      if (topEquip) recommendations.push({ type: "equipment", item: topEquip });
+      if (topPhoto) recommendations.push({ type: "photographer", item: topPhoto });
     }
 
     res.json({
       success: true,
       reply: replyText,
       recommendations,
-      source: "photohub-ai-local",
+      source: "photohub-semantic-engine",
     });
   } catch (error: any) {
     console.error("AI Controller error:", error);
