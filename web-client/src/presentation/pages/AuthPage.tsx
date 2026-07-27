@@ -9,6 +9,7 @@ export interface AuthPageProps {
 
 export function AuthPage({ onClose, message }: AuthPageProps = {}) {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -16,6 +17,7 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
   // Form Fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [selectedRole, setSelectedRole] = useState<"client" | "photographer">("client");
 
@@ -23,7 +25,7 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
   const [useOtpLogin, setUseOtpLogin] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
-  const [otpType, setOtpType] = useState<"signup" | "email">("signup");
+  const [otpType, setOtpType] = useState<"signup" | "email" | "recovery">("signup");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,12 +34,58 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
     setLoading(true);
 
     try {
+      if (isForgotPassword) {
+        if (otpSent) {
+          // Step 2: Verify recovery OTP and set new password
+          if (!otpCode || !newPassword) {
+            setErrorMsg("Vui lòng nhập đầy đủ mã OTP và mật khẩu mới.");
+            setLoading(false);
+            return;
+          }
+          const { error: verifyErr } = await supabase.auth.verifyOtp({
+            email,
+            token: otpCode,
+            type: "recovery",
+          });
+          if (verifyErr) throw verifyErr;
+
+          const { error: updateErr } = await supabase.auth.updateUser({
+            password: newPassword,
+          });
+          if (updateErr) throw updateErr;
+
+          setSuccessMsg("Đặt lại mật khẩu thành công! Vui lòng đăng nhập lại bằng mật khẩu mới.");
+          setIsForgotPassword(false);
+          setOtpSent(false);
+          setOtpCode("");
+          setNewPassword("");
+          setPassword("");
+          return;
+        } else {
+          // Step 1: Send recovery OTP
+          if (!email) {
+            setErrorMsg("Vui lòng nhập địa chỉ email.");
+            setLoading(false);
+            return;
+          }
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin,
+          });
+          if (error) throw error;
+
+          setOtpType("recovery");
+          setOtpSent(true);
+          setSuccessMsg("Mã OTP đặt lại mật khẩu đã được gửi tới email của bạn. Vui lòng kiểm tra email và nhập mã bên dưới.");
+          return;
+        }
+      }
+
       if (otpSent) {
         // OTP Verification Step
         const { data, error } = await supabase.auth.verifyOtp({
           email,
           token: otpCode,
-          type: otpType,
+          type: otpType as "signup" | "email",
         });
 
         if (error) throw error;
@@ -109,6 +157,7 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
   const handleResetForm = () => {
     setOtpSent(false);
     setOtpCode("");
+    setNewPassword("");
     setErrorMsg("");
     setSuccessMsg("");
   };
@@ -166,13 +215,15 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
         </div>
         <h2 className="text-3xl font-extrabold text-photohub-teal font-serif">PhotoHub</h2>
         <p className="text-xs text-photohub-muted font-semibold uppercase tracking-wider font-mono">
-          {otpSent 
-            ? "Xác thực mã OTP" 
-            : isSignUp 
-              ? "Tạo tài khoản mới" 
-              : useOtpLogin 
-                ? "Đăng nhập bằng mã OTP" 
-                : "Đăng nhập hệ sinh thái Studio"
+          {isForgotPassword
+            ? (otpSent ? "Đặt lại mật khẩu mới" : "Khôi phục mật khẩu")
+            : otpSent 
+              ? "Xác thực mã OTP" 
+              : isSignUp 
+                ? "Tạo tài khoản mới" 
+                : useOtpLogin 
+                  ? "Đăng nhập bằng mã OTP" 
+                  : "Đăng nhập hệ sinh thái Studio"
           }
         </p>
       </div>
@@ -184,8 +235,8 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
         </div>
       )}
 
-        {/* Tab Toggle - Only visible when not verifying OTP */}
-        {!otpSent && (
+        {/* Tab Toggle - Only visible when not verifying OTP or forgot password */}
+        {!otpSent && !isForgotPassword && (
           <div className="grid grid-cols-2 bg-photohub-sand p-1.5 rounded-lg text-xs font-semibold text-photohub-teal">
             <button
               onClick={() => {
@@ -215,7 +266,79 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
 
         {/* Form Inputs */}
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          {otpSent ? (
+          {isForgotPassword ? (
+            otpSent ? (
+              // Forgot password OTP & New Password screen
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-photohub-teal">Mã OTP từ email (6 chữ số)</label>
+                  <input
+                    type="text"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    placeholder="123456"
+                    maxLength={6}
+                    className="w-full bg-photohub-sand border border-photohub-teal/10 rounded-lg p-3 text-photohub-teal text-center text-lg tracking-widest font-mono font-bold focus:border-photohub-orange focus:outline-none"
+                    required
+                  />
+                  <p className="text-[10px] text-photohub-muted font-semibold mt-1">
+                    Vui lòng kiểm tra email <strong className="text-photohub-teal">{email}</strong> để lấy mã OTP khôi phục.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-photohub-teal">Mật khẩu mới</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-photohub-sand border border-photohub-teal/10 rounded-lg p-3 text-photohub-teal focus:border-photohub-orange focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(false);
+                    handleResetForm();
+                  }}
+                  className="flex items-center gap-1.5 text-photohub-orange hover:underline font-semibold cursor-pointer py-1"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Quay lại Đăng nhập
+                </button>
+              </div>
+            ) : (
+              // Forgot password Email input screen
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-photohub-teal">Nhập địa chỉ Email tài khoản của bạn</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="email@example.com"
+                    className="w-full bg-photohub-sand border border-photohub-teal/10 rounded-lg p-3 text-photohub-teal focus:border-photohub-orange focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(false);
+                    handleResetForm();
+                  }}
+                  className="flex items-center gap-1.5 text-photohub-orange hover:underline font-semibold cursor-pointer py-1"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Quay lại Đăng nhập
+                </button>
+              </div>
+            )
+          ) : otpSent ? (
             // OTP Code Screen
             <div className="space-y-4">
               <div className="space-y-1.5">
@@ -316,9 +439,19 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
                 </div>
               )}
 
-              {/* Passwordless OTP Login Switch */}
+              {/* Forgot password & OTP Login Switch */}
               {!isSignUp && (
-                <div className="text-right">
+                <div className="flex justify-between items-center text-[11px] font-semibold pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPassword(true);
+                      handleResetForm();
+                    }}
+                    className="text-photohub-orange hover:underline cursor-pointer"
+                  >
+                    🔑 Quên mật khẩu?
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -326,9 +459,9 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
                       setErrorMsg("");
                       setSuccessMsg("");
                     }}
-                    className="text-[11px] text-photohub-orange hover:underline font-semibold cursor-pointer"
+                    className="text-photohub-teal hover:underline cursor-pointer"
                   >
-                    {useOtpLogin ? "🔑 Đăng nhập bằng mật khẩu thường" : "📧 Đăng nhập không cần mật khẩu (gửi OTP)"}
+                    {useOtpLogin ? "🔑 Đăng nhập mật khẩu" : "📧 Đăng nhập OTP"}
                   </button>
                 </div>
               )}
@@ -348,13 +481,15 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
               </>
             ) : (
               <span>
-                {otpSent 
-                  ? "Xác nhận mã OTP" 
-                  : isSignUp 
-                    ? "Đăng Ký Tài Khoản & Nhận OTP" 
-                    : useOtpLogin 
-                      ? "Gửi Mã OTP Đăng Nhập" 
-                      : "Đăng Nhập"
+                {isForgotPassword
+                  ? (otpSent ? "Xác Nhận Đổi Mật Khẩu" : "Gửi Mã OTP Khôi Phục")
+                  : otpSent 
+                    ? "Xác nhận mã OTP" 
+                    : isSignUp 
+                      ? "Đăng Ký Tài Khoản & Nhận OTP" 
+                      : useOtpLogin 
+                        ? "Gửi Mã OTP Đăng Nhập" 
+                        : "Đăng Nhập"
                 }
               </span>
             )}
@@ -362,7 +497,7 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
         </form>
 
         {/* Divider & Social Login Options */}
-        {!otpSent && (
+        {!otpSent && !isForgotPassword && (
           <div className="space-y-4 pt-1">
             <div className="relative flex items-center justify-center">
               <div className="border-t border-photohub-teal/10 w-full"></div>
@@ -414,7 +549,6 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
           </div>
         )}
 
-
         {/* Feedback Messages */}
         {successMsg && (
           <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 rounded-lg text-xs flex items-center gap-2">
@@ -426,15 +560,6 @@ export function AuthPage({ onClose, message }: AuthPageProps = {}) {
         {errorMsg && (
           <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-600 rounded-lg text-xs">
             <span className="font-semibold">Lỗi hệ thống:</span> {errorMsg}
-          </div>
-        )}
-
-        {/* Default Help Notice */}
-        {!isSignUp && !otpSent && (
-          <div className="bg-photohub-sand/50 p-4 rounded-xl border border-photohub-teal/5 text-[11px] text-photohub-muted leading-relaxed font-mono">
-            <span className="font-bold text-photohub-teal">Tài khoản kiểm thử sẵn có:</span>
-            <div className="mt-1">Email: <span className="text-photohub-teal font-semibold">client@example.com</span></div>
-            <div>Mật khẩu: <span className="text-photohub-teal font-semibold">password123</span></div>
           </div>
         )}
       </div>

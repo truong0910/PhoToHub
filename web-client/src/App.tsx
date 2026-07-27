@@ -17,8 +17,9 @@ import {
   Loader,
   LogOut,
   CircleDollarSign,
-  Trash2
-
+  Trash2,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 interface PaymentCountdownProps {
@@ -82,6 +83,17 @@ export default function App() {
 
   // Sorting criteria: 'default' | 'name' | 'price_low' | 'price_high'
   const [sortBy, setSortBy] = useState<"default" | "name" | "price_low" | "price_high">("default");
+
+  // Pagination states
+  const [equipPage, setEquipPage] = useState(1);
+  const [photoPage, setPhotoPage] = useState(1);
+  const equipItemsPerPage = 9;
+  const photoItemsPerPage = 6;
+
+  // Reset equipment page when category or sort changes
+  useEffect(() => {
+    setEquipPage(1);
+  }, [equipCategory, sortBy]);
 
   // Selected product checkout modal state
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -401,7 +413,7 @@ export default function App() {
     specs: ["Bảo hành trách nhiệm", "Đầy đủ pin & sạc đi kèm", "Hỗ trợ kỹ thuật 24/7"],
   }));
 
-  // 5. Apply filters and sort order
+  // 5. Apply filters, sort order, and pagination slicing
   const filteredEquipment = equipmentProducts
     .filter((e) => equipCategory === "all" || e.rawCategory === equipCategory);
 
@@ -412,6 +424,28 @@ export default function App() {
   } else if (sortBy === "price_high") {
     filteredEquipment.sort((a, b) => b.price - a.price);
   }
+
+  const totalEquipPages = Math.max(1, Math.ceil(filteredEquipment.length / equipItemsPerPage));
+  const paginatedEquipment = filteredEquipment.slice(
+    (equipPage - 1) * equipItemsPerPage,
+    equipPage * equipItemsPerPage
+  );
+
+  const totalPhotoPages = Math.max(1, Math.ceil(photographerProducts.length / photoItemsPerPage));
+  const paginatedPhotographers = photographerProducts.slice(
+    (photoPage - 1) * photoItemsPerPage,
+    photoPage * photoItemsPerPage
+  );
+
+  const handleEquipPageChange = (newPage: number) => {
+    setEquipPage(newPage);
+    window.scrollTo({ top: 300, behavior: "smooth" });
+  };
+
+  const handlePhotoPageChange = (newPage: number) => {
+    setPhotoPage(newPage);
+    window.scrollTo({ top: 300, behavior: "smooth" });
+  };
 
   return (
     <div className="min-h-screen bg-photohub-sand text-photohub-teal flex flex-col font-sans selection:bg-photohub-orange selection:text-white">
@@ -655,67 +689,119 @@ export default function App() {
                 Không tìm thấy thiết bị nào phù hợp với danh mục tìm kiếm.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {filteredEquipment.map((p) => (
-                  <div
-                    key={p.id}
-                    className="bg-white border border-photohub-teal/10 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
-                  >
-                    <img
-                      src={p.avatar}
-                      alt={p.name}
-                      className="h-56 w-full object-cover border-b border-photohub-teal/5"
-                    />
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  {paginatedEquipment.map((p) => (
+                    <div
+                      key={p.id}
+                      className="bg-white border border-photohub-teal/10 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
+                    >
+                      <img
+                        src={p.avatar}
+                        alt={p.name}
+                        className="h-56 w-full object-cover border-b border-photohub-teal/5"
+                      />
 
-                    <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[9px] bg-photohub-teal text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider">
-                            {p.category}
-                          </span>
-                          <div className="flex items-center gap-1 text-xs font-bold text-amber-500">
-                            <Star className="w-3.5 h-3.5 fill-amber-500" />
-                            <span>{p.rating}</span>
-                          </div>
-                        </div>
-
-                        <h3 className="font-bold text-lg text-photohub-teal font-serif">
-                          {p.name}
-                        </h3>
-
-                        <p className="text-xs text-photohub-muted leading-relaxed">
-                          {p.desc}
-                        </p>
-
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {p.specs.map((spec, idx) => (
-                            <span key={idx} className="text-[8px] bg-photohub-sand text-photohub-teal/70 px-1.5 py-0.5 rounded font-semibold uppercase font-mono">
-                              {spec}
+                      <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] bg-photohub-teal text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                              {p.category}
                             </span>
-                          ))}
-                        </div>
-                      </div>
+                            <div className="flex items-center gap-1 text-xs font-bold text-amber-500">
+                              <Star className="w-3.5 h-3.5 fill-amber-500" />
+                              <span>{p.rating}</span>
+                            </div>
+                          </div>
 
-                      <div className="flex items-center justify-between pt-3 border-t border-photohub-teal/5">
-                        <div>
-                          <span className="text-[9px] text-photohub-muted font-bold uppercase tracking-wider block">Giá thuê ngày</span>
-                          <div className="text-base font-extrabold font-mono text-photohub-teal">
-                            {p.price.toLocaleString('vi-VN')} đ
-                            <span className="text-[10px] font-semibold text-photohub-muted">/ngày</span>
+                          <h3 className="font-bold text-lg text-photohub-teal font-serif">
+                            {p.name}
+                          </h3>
+
+                          <p className="text-xs text-photohub-muted leading-relaxed">
+                            {p.desc}
+                          </p>
+
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {p.specs.map((spec, idx) => (
+                              <span key={idx} className="text-[8px] bg-photohub-sand text-photohub-teal/70 px-1.5 py-0.5 rounded font-semibold uppercase font-mono">
+                                {spec}
+                              </span>
+                            ))}
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => handleProductSelect(p)}
-                          className="bg-photohub-orange hover:bg-photohub-orange/95 text-white text-xs font-bold px-4 py-2.5 rounded-lg transition-all cursor-pointer shadow-sm active:scale-95"
-                        >
-                          Thuê Ngay
-                        </button>
+                        <div className="flex items-center justify-between pt-3 border-t border-photohub-teal/5">
+                          <div>
+                            <span className="text-[9px] text-photohub-muted font-bold uppercase tracking-wider block">Giá thuê ngày</span>
+                            <div className="text-base font-extrabold font-mono text-photohub-teal">
+                              {p.price.toLocaleString('vi-VN')} đ
+                              <span className="text-[10px] font-semibold text-photohub-muted">/ngày</span>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => handleProductSelect(p)}
+                            className="bg-photohub-orange hover:bg-photohub-orange/95 text-white text-xs font-bold px-4 py-2.5 rounded-lg transition-all cursor-pointer shadow-sm active:scale-95"
+                          >
+                            Thuê Ngay
+                          </button>
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+
+                {/* Equipment Pagination Controls */}
+                {totalEquipPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-photohub-teal/10 rounded-2xl p-4 shadow-sm mt-6">
+                    <div className="text-xs text-photohub-muted font-semibold">
+                      Hiển thị <span className="font-bold text-photohub-teal">{(equipPage - 1) * equipItemsPerPage + 1} - {Math.min(equipPage * equipItemsPerPage, filteredEquipment.length)}</span> trên tổng số <span className="font-bold text-photohub-teal">{filteredEquipment.length}</span> sản phẩm
+                    </div>
+
+                    <div className="flex items-center gap-1 text-xs">
+                      <button
+                        disabled={equipPage === 1}
+                        onClick={() => handleEquipPageChange(equipPage - 1)}
+                        className="p-2 rounded-lg border border-photohub-teal/10 hover:bg-photohub-sand disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                        title="Trang trước"
+                      >
+                        <ChevronLeft className="w-4 h-4 text-photohub-teal" />
+                      </button>
+
+                      {Array.from({ length: totalEquipPages }, (_, i) => i + 1)
+                        .filter(page => page === 1 || page === totalEquipPages || Math.abs(page - equipPage) <= 2)
+                        .map((page, idx, array) => {
+                          const showEllipsisBefore = idx > 0 && page - array[idx - 1] > 1;
+                          return (
+                            <div key={page} className="flex items-center gap-1">
+                              {showEllipsisBefore && <span className="px-1 text-photohub-muted font-bold">...</span>}
+                              <button
+                                onClick={() => handleEquipPageChange(page)}
+                                className={`h-9 w-9 rounded-lg font-bold transition-all cursor-pointer ${
+                                  equipPage === page
+                                    ? "bg-photohub-teal text-white shadow-sm"
+                                    : "bg-photohub-sand/40 text-photohub-teal hover:bg-photohub-sand"
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                      <button
+                        disabled={equipPage === totalEquipPages}
+                        onClick={() => handleEquipPageChange(equipPage + 1)}
+                        className="p-2 rounded-lg border border-photohub-teal/10 hover:bg-photohub-sand disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                        title="Trang tiếp"
+                      >
+                        <ChevronRight className="w-4 h-4 text-photohub-teal" />
+                      </button>
+                    </div>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -734,7 +820,7 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {photographerProducts.map((p) => (
+              {paginatedPhotographers.map((p) => (
                 <div
                   key={p.id}
                   className="bg-white border border-photohub-teal/10 rounded-2xl p-6 flex flex-col sm:flex-row gap-6 shadow-sm hover:shadow-md transition-shadow"
@@ -792,6 +878,47 @@ export default function App() {
                 </div>
               ))}
             </div>
+
+            {/* Photographer Pagination Controls */}
+            {totalPhotoPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-photohub-teal/10 rounded-2xl p-4 shadow-sm mt-6">
+                <div className="text-xs text-photohub-muted font-semibold">
+                  Hiển thị <span className="font-bold text-photohub-teal">{(photoPage - 1) * photoItemsPerPage + 1} - {Math.min(photoPage * photoItemsPerPage, photographerProducts.length)}</span> trên tổng số <span className="font-bold text-photohub-teal">{photographerProducts.length}</span> thợ chụp
+                </div>
+
+                <div className="flex items-center gap-1 text-xs">
+                  <button
+                    disabled={photoPage === 1}
+                    onClick={() => handlePhotoPageChange(photoPage - 1)}
+                    className="p-2 rounded-lg border border-photohub-teal/10 hover:bg-photohub-sand disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4 text-photohub-teal" />
+                  </button>
+
+                  {Array.from({ length: totalPhotoPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => handlePhotoPageChange(page)}
+                      className={`h-9 w-9 rounded-lg font-bold transition-all cursor-pointer ${
+                        photoPage === page
+                          ? "bg-photohub-teal text-white shadow-sm"
+                          : "bg-photohub-sand/40 text-photohub-teal hover:bg-photohub-sand"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+
+                  <button
+                    disabled={photoPage === totalPhotoPages}
+                    onClick={() => handlePhotoPageChange(photoPage + 1)}
+                    className="p-2 rounded-lg border border-photohub-teal/10 hover:bg-photohub-sand disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4 text-photohub-teal" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
