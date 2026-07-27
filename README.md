@@ -102,6 +102,12 @@ graph TD
 ### 5. 📧 Hệ Thống Email Gửi Thật (Real SMTP Email Service)
 * Gửi email HTML tự động cho các sự kiện: Khởi tạo đơn (`pending`), Đã duyệt đơn (`approved`), Hủy đơn (`cancelled`).
 
+### 6. 🤖 Trợ Lý Chatbot AI Tư Vấn 100% LLM (PhoTohub AI Assistant)
+* **Kiến Trúc 100% LLM (Zero Else-If Rules):** Ứng dụng mô hình ngôn ngữ lớn **Google Gemini 2.5 Flash LLM** (kết hợp hỗ trợ **Ngrok AI Tunnel**) tự động suy luận linh hoạt cho BẤT KỲ nhu cầu nào của khách hàng (đi chơi, đi phượt, chụp cưới, chụp em bé, ngân sách lẻ 100k/200k, tổng số sản phẩm kho hàng...).
+* **Real-time Database Context Injection:** Tự động truy vấn 100 thiết bị máy ảnh & 20 nhiếp ảnh gia từ Supabase nạp vào ngữ cảnh của LLM để đảm bảo câu trả lời luôn chính xác với sản phẩm thật đang sẵn sàng cho thuê.
+* **Giao Diện Chatbot Floating Widget:** Nút bấm nổi góc dưới màn hình phong cách Glassmorphism, hỗ trợ gợi ý câu hỏi 1 chạm (Quick Prompts) và đính kèm thẻ sản phẩm/thợ chụp có nút **"Thuê Ngay / Đặt Lịch"** trực tiếp trên khung chat.
+* **Cấu hình đơn giản:** Điền `GEMINI_API_KEY` (hoặc `AI_ENDPOINT_URL` của Ngrok) vào `backend/.env` để kích hoạt dịch vụ ngay lập tức.
+
 ---
 
 ## 🚀 Hướng Dẫn Chạy Dự Án Cục Bộ (Local Setup)
