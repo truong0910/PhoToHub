@@ -10,6 +10,7 @@ import { BookingService } from "./services/booking.service.js";
 import { BookingController } from "./controllers/booking.controller.js";
 import { AuthService } from "./services/auth.service.js";
 import { AuthController } from "./controllers/auth.controller.js";
+import aiRoutes from "./routes/ai.routes.js";
 
 // Initialize async BullMQ background workers
 import "./workers/booking-timeout.worker.js";
@@ -25,6 +26,9 @@ const authController = new AuthController(authService);
 // 1. Enable Global CORS and JSON body parser
 app.use(cors());
 app.use(express.json());
+
+// AI Chatbot Assistant Endpoint
+app.use("/api/v1/ai", aiRoutes);
 
 // OAuth Social Auth Routes (Google & Facebook)
 app.get("/api/v1/auth/google", authController.handleGoogleLogin);

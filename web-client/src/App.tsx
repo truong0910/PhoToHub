@@ -3,6 +3,7 @@ import { useUserBooking } from "./domain/hooks/useUserBooking.js";
 import { OrderHistory } from "./presentation/pages/OrderHistory.js";
 import { AuthPage } from "./presentation/pages/AuthPage.js";
 import { PhotographerDashboard } from "./presentation/pages/PhotographerDashboard.js";
+import { AIChatWidget } from "./presentation/components/AIChatWidget.js";
 import { supabase } from "./config/supabase.js";
 import {
   ShoppingBag,
@@ -1785,6 +1786,9 @@ export default function App() {
           message={authModalReason}
         />
       )}
+
+      {/* Floating AI Chatbot Assistant Widget */}
+      <AIChatWidget onSelectProduct={handleProductSelect} />
     </div>
   );
 }
