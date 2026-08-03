@@ -104,6 +104,9 @@ Bắt buộc trả về đúng cấu trúc JSON sau (không chứa Markdown bọ
   "recommended_photographer_ids": ["id_tho_chup_1"]
 }`;
 
+        const gController = new AbortController();
+        const gTimeout = setTimeout(() => gController.abort(), 8000); // 8s timeout
+
         const response = await fetch(geminiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -119,7 +122,10 @@ Bắt buộc trả về đúng cấu trúc JSON sau (không chứa Markdown bọ
               responseMimeType: "application/json",
             },
           }),
+          signal: gController.signal,
         });
+
+        clearTimeout(gTimeout);
 
         if (response.ok) {
           const geminiData = await response.json();
@@ -153,21 +159,35 @@ Bắt buộc trả về đúng cấu trúc JSON sau (không chứa Markdown bọ
           }
         }
       } catch (geminiErr: any) {
-        console.error("Gemini LLM call failed:", geminiErr.message);
+        console.error("Gemini LLM call timed out or failed, switching to fast local fallback:", geminiErr.message);
       }
     }
 
-    // 4. If no LLM Key is configured in .env, prompt user to add GEMINI_API_KEY
+    // 4. Fast Local Fallback Response (Guarantees instant answer under 100ms)
+    const lowerPrompt = userPrompt.toLowerCase();
+    const recommendations: any[] = [];
+    let replyText = "";
+
+    const topEquip = (equipment || []).find(e => lowerPrompt.includes("cưới") ? e.name.includes("A7 IV") : e.name.includes("FX3") || e.name.includes("A6700")) || equipment?.[0];
+    const topPhoto = (photographers || [])[0];
+
+    replyText = `PhoTohub AI Assistant đã ghi nhận nhu cầu của bạn! 🤖
+
+Hiện tại kho hàng PhoTohub đang có **${context.total_equipment_count} thiết bị máy ảnh/phụ kiện** và **${context.total_photographer_count} nhiếp ảnh gia chuyên nghiệp** sẵn sàng phục vụ bạn:
+
+📸 **Thiết bị nổi bật**: ${topEquip ? topEquip.name : "Sony A7 IV Full-Frame"}
+👨‍🎨 **Thợ chụp gợi ý**: ${topPhoto ? `Nhiếp ảnh gia ${topPhoto.full_name}` : "Nhiếp ảnh gia PhoTohub"}
+
+Bạn có thể ấn trực tiếp vào sản phẩm bên dưới để tiến hành đặt lịch thuê ngay!`;
+
+    if (topEquip) recommendations.push({ type: "equipment", item: topEquip });
+    if (topPhoto) recommendations.push({ type: "photographer", item: topPhoto });
+
     res.json({
       success: true,
-      reply: `Vui lòng điền mã **GEMINI_API_KEY** trong file \`backend/.env\` (hoặc bật Ngrok AI Service) để kích hoạt mô hình LLM tự động trả lời mượt mà 100% mọi câu hỏi! 🤖✨
-
-(Google cấp API Key hoàn toàn miễn phí tại: https://aistudio.google.com/app/apikey)`,
-      recommendations: [
-        ...(equipment?.[0] ? [{ type: "equipment", item: equipment[0] }] : []),
-        ...(photographers?.[0] ? [{ type: "photographer", item: photographers[0] }] : []),
-      ],
-      source: "no-llm-key-notice",
+      reply: replyText,
+      recommendations,
+      source: "photohub-fast-fallback",
     });
   } catch (error: any) {
     console.error("AI Controller error:", error);
