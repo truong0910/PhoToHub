@@ -1788,7 +1788,7 @@ export default function App() {
       )}
 
       {/* Floating AI Chatbot Assistant Widget */}
-      <AIChatWidget onSelectProduct={handleProductSelect} />
+      {/* <AIChatWidget onSelectProduct={handleProductSelect} /> */}
     </div>
   );
 }
